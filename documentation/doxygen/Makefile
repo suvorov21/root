@@ -1,5 +1,5 @@
 
-.PHONY: filter folders mathjax images doxygen
+.PHONY: filter folders mathjax js images doxygen
 
 PYTHON_EXECUTABLE ?= /usr/bin/python
 export PYTHON_EXECUTABLE
@@ -22,7 +22,7 @@ define MkDir
 	+@[ -d $1 ] || mkdir -p $1
 endef
 
-all: filter folders mathjax images doxygen
+all: filter folders mathjax js images doxygen
 
 filter:
 	`root-config --cxx` -o filter filter.cxx -std=c++11
@@ -31,12 +31,17 @@ mathjax:
 	$(call MkDir,$(DOXYGEN_IMAGE_PATH))
 	tar xfz mathjax.tar.gz -C $(DOXYGEN_IMAGE_PATH)
 
+js:
+	$(call MkDir,$(DOXYGEN_IMAGE_PATH))
+	cp -r ../../js $(DOXYGEN_IMAGE_PATH)
+
 images:
 	$(call MkDir,$(DOXYGEN_IMAGE_PATH))
 	cp images/* $(DOXYGEN_IMAGE_PATH)
 
 pyzdoc:
 	$(PYTHON_EXECUTABLE) extract_docstrings.py $(PYZ_DIR)
+	$(PYTHON_EXECUTABLE) print_roofit_pyz_doctrings.py > $(PYZ_DIR)/_roofit.pyzdoc
 
 doxygen: filter pyzdoc
 	$(call MkDir,$(DOXYGEN_OUTPUT_DIRECTORY))

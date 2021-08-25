@@ -21,6 +21,7 @@
 #include <deque>
 #include <functional>
 #include <memory>
+#include <new> // std::hardware_destructive_interference_size
 #include <string>
 #include <type_traits> // std::decay
 #include <vector>
@@ -28,8 +29,12 @@
 class TTree;
 class TTreeReader;
 
-/// \cond HIDDEN_SYMBOLS
+
 namespace ROOT {
+namespace RDF {
+using ColumnNames_t = std::vector<std::string>;
+}
+
 namespace Experimental {
 class RLogChannel;
 }
@@ -40,7 +45,8 @@ class RDataSource;
 
 namespace Detail {
 namespace RDF {
-using ColumnNames_t = std::vector<std::string>;
+
+using ROOT::RDF::ColumnNames_t;
 
 ROOT::Experimental::RLogChannel &RDFLogChannel();
 
@@ -69,7 +75,7 @@ using namespace ROOT::RDF;
 /// generic IsDataContainer<T>.
 template <typename T>
 struct IsDataContainer {
-   using Test_t = typename std::decay<T>::type;
+   using Test_t = std::decay_t<T>;
 
    template <typename A>
    static constexpr bool Test(A *pt, A const *cpt = nullptr, decltype(pt->begin()) * = nullptr,
@@ -156,16 +162,10 @@ struct RemoveFirstTwoParametersIf<true, TypeList> {
 template <bool MustRemove, typename TypeList>
 using RemoveFirstTwoParametersIf_t = typename RemoveFirstTwoParametersIf<MustRemove, TypeList>::type;
 
-/// Detect whether a type is an instantiation of RVec<T>
-template <typename>
-struct IsRVec_t : public std::false_type {};
-
-template <typename T>
-struct IsRVec_t<ROOT::VecOps::RVec<T>> : public std::true_type {};
-
 // Check the value_type type of a type with a SFINAE to allow compilation in presence
 // fundamental types
-template <typename T, bool IsDataContainer = IsDataContainer<typename std::decay<T>::type>::value || std::is_same<std::string, T>::value>
+template <typename T,
+          bool IsDataContainer = IsDataContainer<std::decay_t<T>>::value || std::is_same<std::string, T>::value>
 struct ValueType {
    using value_type = typename T::value_type;
 };
@@ -203,10 +203,26 @@ bool IsInternalColumn(std::string_view colName);
 /// Get optimal column width for printing a table given the names and the desired minimal space between columns
 unsigned int GetColumnWidth(const std::vector<std::string>& names, const unsigned int minColumnSpace = 8u);
 
+// We could just check `#ifdef __cpp_lib_hardware_interference_size`, but at least on Mac 11
+// libc++ defines that macro but is missing the actual feature, so we use an ad-hoc ROOT macro instead.
+// See the relevant entry in cmake/modules/RootConfiguration.cmake for more info.
+#ifdef R__HAS_HARDWARE_INTERFERENCE_SIZE
+   // C++17 feature (so we can use inline variables)
+   inline constexpr std::size_t kCacheLineSize = std::hardware_destructive_interference_size;
+#else
+   // safe bet: assume the typical 64 bytes
+   static constexpr std::size_t kCacheLineSize = 64;
+#endif
+
+/// Stepping through CacheLineStep<T> values in a vector<T> brings you to a new cache line.
+/// Useful to avoid false sharing.
+template <typename T>
+constexpr std::size_t CacheLineStep() {
+   return (kCacheLineSize + sizeof(T) - 1) / sizeof(T);
+}
+
 } // end NS RDF
 } // end NS Internal
 } // end NS ROOT
-
-/// \endcond
 
 #endif // RDFUTILS

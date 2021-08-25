@@ -1,7 +1,14 @@
 import unittest
 
-from DistRDF import ComputationGraphGenerator, Node, Proxy
+from DistRDF import ComputationGraphGenerator, HeadNode, Proxy
 from DistRDF.Backends import Base
+
+
+def create_dummy_headnode(*args):
+    """Create dummy head node instance needed in the test"""
+    # Pass None as `npartitions`. The tests will modify this member
+    # according to needs
+    return HeadNode.get_headnode(None, *args)
 
 
 class ComputationGraphGeneratorTest(unittest.TestCase):
@@ -58,7 +65,7 @@ class ComputationGraphGeneratorTest(unittest.TestCase):
         t = ComputationGraphGeneratorTest.Temp()
 
         # Head node
-        hn = Node.HeadNode(1)
+        hn = create_dummy_headnode(1)
         hn.backend = ComputationGraphGeneratorTest.TestBackend()
         node = Proxy.TransformationProxy(hn)
         # Set of operations to build the graph
@@ -72,7 +79,7 @@ class ComputationGraphGeneratorTest(unittest.TestCase):
         generator = ComputationGraphGenerator.ComputationGraphGenerator(
             node.proxied_node)
         mapper_func = generator.get_callable()
-        values = mapper_func(t)
+        values = mapper_func(t, 0)
         nodes = generator.get_action_nodes()
 
         reqd_order = [1, 3, 2, 2, 3, 2]
@@ -91,7 +98,7 @@ class ComputationGraphGeneratorTest(unittest.TestCase):
         t = ComputationGraphGeneratorTest.Temp()
 
         # Head node
-        hn = Node.HeadNode(1)
+        hn = create_dummy_headnode(1)
         hn.backend = ComputationGraphGeneratorTest.TestBackend()
         node = Proxy.TransformationProxy(hn)
 
@@ -109,7 +116,7 @@ class ComputationGraphGeneratorTest(unittest.TestCase):
         generator = ComputationGraphGenerator.ComputationGraphGenerator(
             node.proxied_node)
         mapper_func = generator.get_callable()
-        values = mapper_func(t)
+        values = mapper_func(t, 0)
         nodes = generator.get_action_nodes()
 
         reqd_order = [1, 2, 2, 2, 3, 2]

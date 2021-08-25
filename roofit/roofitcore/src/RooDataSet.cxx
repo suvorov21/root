@@ -92,18 +92,19 @@ For the inverse conversion, see `RooAbsData::convertToVectorStore()`.
 #include "RooCompositeDataStore.h"
 #include "RooSentinel.h"
 #include "RooTrace.h"
-#include "RooHelpers.h"
+
+#include "ROOT/StringUtils.hxx"
 
 #include "Math/Util.h"
 #include "TTree.h"
 #include "TH2.h"
 #include "TFile.h"
 #include "TBuffer.h"
-#include "ROOT/RMakeUnique.hxx"
 #include "strlcpy.h"
 #include "snprintf.h"
 
 #include <iostream>
+#include <memory>
 #include <fstream>
 
 
@@ -217,7 +218,7 @@ RooDataSet::RooDataSet() : _wgtVar(0)
 /// </table>
 ///
 
-RooDataSet::RooDataSet(const char* name, const char* title, const RooArgSet& vars, const RooCmdArg& arg1, const RooCmdArg& arg2, const RooCmdArg& arg3,
+RooDataSet::RooDataSet(std::string_view name, std::string_view title, const RooArgSet& vars, const RooCmdArg& arg1, const RooCmdArg& arg2, const RooCmdArg& arg3,
 		       const RooCmdArg& arg4,const RooCmdArg& arg5,const RooCmdArg& arg6,const RooCmdArg& arg7,const RooCmdArg& arg8)  :
   RooAbsData(name,title,RooArgSet(vars,(RooAbsArg*)RooCmdConfig::decodeObjOnTheFly("RooDataSet::RooDataSet", "IndexCat",0,0,arg1,arg2,arg3,arg4,arg5,arg6,arg7,arg8)))
 {
@@ -377,7 +378,7 @@ RooDataSet::RooDataSet(const char* name, const char* title, const RooArgSet& var
     map<string,RooDataSet*> hmap ;  
     if (indexCat) {
       TIterator* hiter = impSliceData.MakeIterator() ;
-      for (const auto& token : RooHelpers::tokenise(impSliceNames, ",")) {
+      for (const auto& token : ROOT::Split(impSliceNames, ",")) {
         hmap[token] = (RooDataSet*) hiter->Next() ;
       }
       delete hiter ;
@@ -622,7 +623,7 @@ RooDataSet::RooDataSet(const char* name, const char* title, const RooArgSet& var
 /// Constructor of an empty data set from a RooArgSet defining the dimensions
 /// of the data space.
 
-RooDataSet::RooDataSet(const char *name, const char *title, const RooArgSet& vars, const char* wgtVarName) :
+RooDataSet::RooDataSet(std::string_view name, std::string_view title, const RooArgSet& vars, const char* wgtVarName) :
   RooAbsData(name,title,vars)
 {
 //   cout << "RooDataSet::ctor(" << this << ") storageType = " << ((defaultStorageType==Tree)?"Tree":"Vector") << endl ;
@@ -654,7 +655,7 @@ RooDataSet::RooDataSet(const char *name, const char *title, const RooArgSet& var
 /// subset of an existing data
 ///
 
-RooDataSet::RooDataSet(const char *name, const char *title, RooDataSet *dset, 
+RooDataSet::RooDataSet(std::string_view name, std::string_view title, RooDataSet *dset, 
 		       const RooArgSet& vars, const char *cuts, const char* wgtVarName) :
   RooAbsData(name,title,vars)
 {
@@ -695,7 +696,7 @@ RooDataSet::RooDataSet(const char *name, const char *title, RooDataSet *dset,
 /// uses this constructor, is the most convenient way to create a
 /// subset of an existing data
 
-RooDataSet::RooDataSet(const char *name, const char *title, RooDataSet *dset, 
+RooDataSet::RooDataSet(std::string_view name, std::string_view title, RooDataSet *dset, 
 		       const RooArgSet& vars, const RooFormulaVar& cutVar, const char* wgtVarName) :
   RooAbsData(name,title,vars)
 {
@@ -735,7 +736,7 @@ RooDataSet::RooDataSet(const char *name, const char *title, RooDataSet *dset,
 /// operating exclusively and directly on the data set dimensions, the equivalent
 /// constructor with a string based cut expression is recommended.
 
-RooDataSet::RooDataSet(const char *name, const char *title, TTree *theTree,
+RooDataSet::RooDataSet(std::string_view name, std::string_view title, TTree *theTree,
     const RooArgSet& vars, const RooFormulaVar& cutVar, const char* wgtVarName) :
   RooAbsData(name,title,vars)
 {
@@ -783,7 +784,7 @@ RooDataSet::RooDataSet(const char *name, const char *title, TTree *theTree,
 /// If other expressions are needed, such as intermediate formula objects, use
 /// RooDataSet::RooDataSet(const char*,const char*,TTree*,const RooArgSet&,const RooFormulaVar&,const char*)
 /// \param[in] wgtVarName Name of the variable in `vars` that represents an event weight.
-RooDataSet::RooDataSet(const char* name, const char* title, TTree* theTree,
+RooDataSet::RooDataSet(std::string_view name, std::string_view title, TTree* theTree,
     const RooArgSet& vars, const char* cuts, const char* wgtVarName) :
   RooAbsData(name,title,vars)
 {
@@ -824,7 +825,7 @@ RooDataSet::RooDataSet(RooDataSet const & other, const char* newname) :
 ////////////////////////////////////////////////////////////////////////////////
 /// Protected constructor for internal use only
 
-RooDataSet::RooDataSet(const char *name, const char *title, RooDataSet *dset, 
+RooDataSet::RooDataSet(std::string_view name, std::string_view title, RooDataSet *dset, 
 		       const RooArgSet& vars, const RooFormulaVar* cutVar, const char* cutRange,
 		       std::size_t nStart, std::size_t nStop, Bool_t copyCache, const char* wgtVarName) :
   RooAbsData(name,title,vars)
@@ -974,16 +975,17 @@ RooDataSet::~RooDataSet()
 
 RooDataHist* RooDataSet::binnedClone(const char* newName, const char* newTitle) const 
 {
-  TString title, name ;
+  std::string title;
+  std::string name;
   if (newName) {
     name = newName ;
   } else {
-    name = Form("%s_binned",GetName()) ;
+    name = std::string(GetName()) + "_binned" ;
   }
   if (newTitle) {
     title = newTitle ;
   } else {
-    title = Form("%s_binned",GetTitle()) ;
+    name = std::string(GetTitle()) + "_binned" ;
   }
 
   return new RooDataHist(name,title,*get(),*this) ;
@@ -1033,21 +1035,19 @@ void RooDataSet::getBatches(RooBatchCompute::RunContext& evalData, std::size_t b
 
 
 ////////////////////////////////////////////////////////////////////////////////
-
-void RooDataSet::weightError(Double_t& lo, Double_t& hi, ErrorType etype) const 
+/// \copydoc RooAbsData::weightError(double&,double&,RooAbsData::ErrorType) const
+void RooDataSet::weightError(double& lo, double& hi, ErrorType etype) const
 {
   store()->weightError(lo,hi,etype) ;
 }
 
 
-
 ////////////////////////////////////////////////////////////////////////////////
-
-Double_t RooDataSet::weightError(ErrorType etype) const 
+/// \copydoc RooAbsData::weightError(ErrorType)
+double RooDataSet::weightError(ErrorType etype) const
 {
   return store()->weightError(etype) ;
 }
-
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1772,7 +1772,7 @@ RooDataSet *RooDataSet::read(const char *fileList, const RooArgList &varList,
 
   // Loop over all names in comma separated list
   Int_t fileSeqNum(0);
-  for (const auto& filename : RooHelpers::tokenise(std::string(fileList), ", ")) {
+  for (const auto& filename : ROOT::Split(std::string(fileList), ", ")) {
     // Determine index category number, if this option is active
     if (indexCat) {
 
@@ -2063,3 +2063,15 @@ void RooDataSet::convertToTreeStore()
    }
 }
 
+
+// Compile-time test if we can still use TStrings for the constructors of
+// RooDataClasses, either for both name and title or for only one of them.
+namespace {
+  TString tstr = "tstr";
+  const char * cstr = "cstr";
+  RooRealVar x{"x", "x", 1.0};
+  RooArgSet vars{x};
+  RooDataSet d1(tstr, tstr, vars, nullptr);
+  RooDataSet d2(tstr, cstr, vars, nullptr);
+  RooDataSet d3(cstr, tstr, vars, nullptr);
+}

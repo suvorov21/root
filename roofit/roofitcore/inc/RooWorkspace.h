@@ -24,8 +24,8 @@
 #include "TUUID.h"
 #include <map>
 #include <list>
+#include <memory>
 #include <string>
-#include "ROOT/RMakeUnique.hxx"
 
 class TClass ;
 class RooAbsPdf ;
@@ -248,6 +248,7 @@ public:
  private:
     friend class RooAbsArg;
     friend class RooAbsPdf;
+    friend class RooConstraintSum;
     Bool_t defineSetInternal(const char *name, const RooArgSet &aset);
 
     Bool_t isValidCPPID(const char *name);

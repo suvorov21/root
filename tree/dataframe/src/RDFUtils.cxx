@@ -137,7 +137,8 @@ std::string ComposeRVecTypeName(const std::string &valueType)
 
 std::string GetLeafTypeName(TLeaf *leaf, const std::string &colName)
 {
-   std::string colType = leaf->GetTypeName();
+   const char *colTypeCStr = leaf->GetTypeName();
+   std::string colType = colTypeCStr == nullptr ? "" : colTypeCStr;
    if (colType.empty())
       throw std::runtime_error("Could not deduce type of leaf " + colName);
    if (leaf->GetLeafCount() != nullptr && leaf->GetLenStatic() == 1) {
@@ -202,7 +203,7 @@ std::string GetBranchOrLeafTypeName(TTree &t, const std::string &colName)
             }
             return be->GetClassName();
          }
-      } else if (branch->IsA() == TBranch::Class() && branch->GetListOfLeaves()->GetEntries() == 1) {
+      } else if (branch->IsA() == TBranch::Class() && branch->GetListOfLeaves()->GetEntriesUnsafe() == 1) {
          // normal branch (not a TBranchElement): if it has only one leaf, we pick the type of the leaf:
          // RDF and TTreeReader allow referring to branch.leaf as just branch if branch has only one leaf
          leaf = static_cast<TLeaf *>(branch->GetListOfLeaves()->UncheckedAt(0));

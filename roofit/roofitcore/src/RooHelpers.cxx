@@ -20,7 +20,9 @@
 #include "RooDataHist.h"
 #include "RooDataSet.h"
 #include "RooAbsRealLValue.h"
+#include "RooArgList.h"
 
+#include "ROOT/StringUtils.hxx"
 #include "TClass.h"
 
 namespace RooHelpers {
@@ -57,30 +59,6 @@ LocalChangeMsgLevel::~LocalChangeMsgLevel() {
 }
 
 
-/// Tokenise the string by splitting at the characters in delims.
-/// Consecutive delimiters are collapsed, so that no delimiters will appear in the
-/// tokenised strings, and no emtpy strings are returned.
-/// \param[in] str String to tokenise.
-/// \param[in] delims One or more delimiters used to split the string.
-/// \param[in] returnEmptyToken If the string is empty, return one empty token. Default is to return an empty vector.
-std::vector<std::string> tokenise(const std::string &str, const std::string &delims, bool returnEmptyToken /*= true*/) {
-  if (str.empty())
-    return std::vector<std::string>(returnEmptyToken ? 1 : 0);
-
-  std::vector<std::string> tokens;
-
-  auto beg = str.find_first_not_of(delims, 0);
-  auto end = str.find_first_of(delims, beg);
-  do {
-    tokens.emplace_back(str.substr(beg, end-beg));
-    beg = str.find_first_not_of(delims, end);
-    end = str.find_first_of(delims, beg);
-  } while (beg != std::string::npos);
-
-  return tokens;
-}
-
-
 /// Hijack all messages with given level and topics while this object is alive.
 /// \param[in] level Minimum level to hijack. Higher levels also get captured.
 /// \param[in] topics Topics to hijack. Use `|` to combine different topics, and cast to `RooFit::MsgTopic` if necessary.
@@ -89,26 +67,45 @@ HijackMessageStream::HijackMessageStream(RooFit::MsgLevel level, RooFit::MsgTopi
 {
   auto& msg = RooMsgService::instance();
   _oldKillBelow = msg.globalKillBelow();
-  msg.setGlobalKillBelow(level);
+  if (_oldKillBelow > level)
+    msg.setGlobalKillBelow(level);
+
+  std::vector<RooMsgService::StreamConfig> tmpStreams;
   for (int i = 0; i < msg.numStreams(); ++i) {
     _oldConf.push_back(msg.getStream(i));
-    msg.getStream(i).removeTopic(topics);
-    msg.setStreamStatus(i, true);
+    if (msg.getStream(i).match(level, topics, static_cast<RooAbsArg*>(nullptr))) {
+      tmpStreams.push_back(msg.getStream(i));
+      msg.setStreamStatus(i, false);
+    }
   }
 
   _thisStream = msg.addStream(level,
       RooFit::Topic(topics),
       RooFit::OutputStream(_str),
       objectName ? RooFit::ObjectName(objectName) : RooCmdArg());
+
+  for (RooMsgService::StreamConfig& st : tmpStreams) {
+    msg.addStream(st.minLevel,
+        RooFit::Topic(st.topic),
+        RooFit::OutputStream(*st.os),
+        RooFit::ObjectName(st.objectName.c_str()),
+        RooFit::ClassName(st.className.c_str()),
+        RooFit::BaseClassName(st.baseClassName.c_str()),
+        RooFit::TagName(st.tagName.c_str()));
+  }
 }
 
+/// Deregister the hijacked stream and restore the stream state of all previous streams.
 HijackMessageStream::~HijackMessageStream() {
   auto& msg = RooMsgService::instance();
   msg.setGlobalKillBelow(_oldKillBelow);
   for (unsigned int i = 0; i < _oldConf.size(); ++i) {
     msg.getStream(i) = _oldConf[i];
   }
-  msg.deleteStream(_thisStream);
+
+  while (_thisStream < msg.numStreams()) {
+    msg.deleteStream(_thisStream);
+  }
 }
 
 
@@ -243,6 +240,38 @@ bool checkIfRangesOverlap(RooAbsPdf const& pdf, RooAbsData const& data, std::vec
   }
 
   return false;
+}
+
+
+/// Create a string with all sorted names of RooArgSet elements separated by colons.
+/// \param[in] arg argSet The input RooArgSet.
+std::string getColonSeparatedNameString(RooArgSet const& argSet) {
+
+  RooArgList tmp(argSet);
+  tmp.sort();
+
+  std::string content;
+  for(auto const& arg : tmp) {
+    content += arg->GetName();
+    content += ":";
+  }
+  if(!content.empty()) {
+    content.pop_back();
+  }
+  return content;
+}
+
+
+/// Construct a RooArgSet of objects in a RooArgSet whose names match to those
+/// in the names string.
+/// \param[in] arg argSet The input RooArgSet.
+/// \param[in] arg names The names of the objects to select in a colon-separated string.
+RooArgSet selectFromArgSet(RooArgSet const& argSet, std::string const& names) {
+  RooArgSet output;
+  for(auto const& name : ROOT::Split(names, ":")) {
+    if(auto arg = argSet.find(name.c_str())) output.add(*arg);
+  }
+  return output;
 }
 
 

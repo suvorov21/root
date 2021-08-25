@@ -280,16 +280,17 @@ public:
   friend class RooAddPdf ;
   friend class RooAddPdfOrig ;
   RooArgSet* getVariables(Bool_t stripDisconnected=kTRUE) const ;
-  RooArgSet* getParameters(const RooAbsData* data, Bool_t stripDisconnected=kTRUE) const ;
+  RooArgSet* getParameters(const RooAbsData* data, bool stripDisconnected=true) const ;
   /// Return the parameters of this p.d.f when used in conjuction with dataset 'data'
-  RooArgSet* getParameters(const RooAbsData& data, Bool_t stripDisconnected=kTRUE) const {
+  RooArgSet* getParameters(const RooAbsData& data, bool stripDisconnected=true) const {
     return getParameters(&data,stripDisconnected) ;
   }
   /// Return the parameters of the p.d.f given the provided set of observables
-  RooArgSet* getParameters(const RooArgSet& observables, Bool_t stripDisconnected=kTRUE) const {
+  RooArgSet* getParameters(const RooArgSet& observables, bool stripDisconnected=true) const {
     return getParameters(&observables,stripDisconnected);
   }
-  virtual RooArgSet* getParameters(const RooArgSet* depList, Bool_t stripDisconnected=kTRUE) const ;
+  RooArgSet* getParameters(const RooArgSet* observables, bool stripDisconnected=true) const;
+  virtual bool getParameters(const RooArgSet* observables, RooArgSet& outputSet, bool stripDisconnected=true) const;
   /// Given a set of possible observables, return the observables that this PDF depends on.
   RooArgSet* getObservables(const RooArgSet& set, Bool_t valueOnly=kTRUE) const {
     return getObservables(&set,valueOnly) ;
@@ -299,7 +300,8 @@ public:
   RooArgSet* getObservables(const RooAbsData& data) const {
     return getObservables(&data) ;
   }
-  RooArgSet* getObservables(const RooArgSet* depList, Bool_t valueOnly=kTRUE) const ;
+  RooArgSet* getObservables(const RooArgSet* depList, bool valueOnly=true) const ;
+  bool getObservables(const RooAbsCollection* depList, RooArgSet& outputSet, bool valueOnly=true) const;
   Bool_t observableOverlaps(const RooAbsData* dset, const RooAbsArg& testArg) const ;
   Bool_t observableOverlaps(const RooArgSet* depList, const RooAbsArg& testArg) const ;
   virtual Bool_t checkObservables(const RooArgSet* nset) const ;
@@ -308,6 +310,7 @@ public:
 
 
 
+  void attachArgs(const RooAbsCollection &set);
   void attachDataSet(const RooAbsData &set);
   void attachDataStore(const RooAbsDataStore &set);
 
@@ -500,6 +503,12 @@ public:
   RooExpensiveObjectCache& expensiveObjectCache() const ;
   virtual void setExpensiveObjectCache(RooExpensiveObjectCache &cache) { _eocache = &cache; }
 
+  /// Overwrite the current value stored in this object, making it look like this object computed that value.
+  /// \param[in] value Value to store.
+  /// \param[in] notifyClients Notify users of this object that they need to
+  /// recompute their values.
+  virtual void setCachedValue(double /*value*/, bool /*notifyClients*/ = true) {};
+
   /// @}
   ////////////////////////////////////////////////////////////////////////////
 
@@ -526,7 +535,12 @@ public:
   RooAbsProxy* getProxy(Int_t index) const ;
   Int_t numProxies() const ;
 
-
+  /// De-duplicated pointer to this object's name.
+  /// This can be used for fast name comparisons.
+  /// like `if (namePtr() == other.namePtr())`.
+  /// \note TNamed::GetName() will return a pointer that's
+  /// different for each object, but namePtr() always points
+  /// to a unique instance.
   inline const TNamed* namePtr() const {
     return _namePtr ;
   }
@@ -597,7 +611,8 @@ private:
   RefCountList_t _clientListValue; // subset of clients that requested value dirty flag propagation
 
   RooRefArray _proxyList        ; // list of proxies
-  std::deque<RooAbsCache*> _cacheList ; // list of caches
+
+  std::vector<RooAbsCache*> _cacheList ; //! list of caches
 
 
   // Proxy management
@@ -608,7 +623,6 @@ private:
   friend class RooObjectFactory ;
   friend class RooHistPdf ;
   friend class RooHistFunc ;
-  friend class RooHistFunc2 ;
   void registerProxy(RooArgProxy& proxy) ;
   void registerProxy(RooSetProxy& proxy) ;
   void registerProxy(RooListProxy& proxy) ;
@@ -674,7 +688,7 @@ private:
 
   mutable RooExpensiveObjectCache* _eocache{nullptr}; // Pointer to global cache manager for any expensive components created by this object
 
-  mutable TNamed* _namePtr ; //! Do not persist. Pointer to global instance of string that matches object named
+  mutable TNamed* _namePtr ; //! De-duplicated name pointer. This will be equal for all objects with the same name.
   Bool_t _isConstant ; //! Cached isConstant status
 
   mutable Bool_t _localNoInhibitDirty ; //! Prevent 'AlwaysDirty' mode for this node
@@ -694,7 +708,7 @@ private:
   static std::stack<RooAbsArg*> _ioReadStack ; // reading stack
   /// \endcond
 
-  ClassDef(RooAbsArg,7) // Abstract variable
+  ClassDef(RooAbsArg,8) // Abstract variable
 };
 
 std::ostream& operator<<(std::ostream& os, const RooAbsArg &arg);

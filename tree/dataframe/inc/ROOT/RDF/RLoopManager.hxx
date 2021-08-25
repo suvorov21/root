@@ -12,6 +12,7 @@
 #define ROOT_RLOOPMANAGER
 
 #include "ROOT/RDF/RNodeBase.hxx"
+#include "ROOT/RDF/RDataBlockNotifier.hxx"
 
 #include <functional>
 #include <map>
@@ -40,6 +41,47 @@ class GraphNode;
 namespace GraphDrawing {
 class GraphCreatorHelper;
 } // ns GraphDrawing
+
+using Callback_t = std::function<void(unsigned int)>;
+
+class RCallback {
+   const Callback_t fFun;
+   const ULong64_t fEveryN;
+   std::vector<ULong64_t> fCounters;
+
+public:
+   RCallback(ULong64_t everyN, Callback_t &&f, unsigned int nSlots)
+      : fFun(std::move(f)), fEveryN(everyN), fCounters(nSlots, 0ull)
+   {
+   }
+
+   void operator()(unsigned int slot)
+   {
+      auto &c = fCounters[slot];
+      ++c;
+      if (c == fEveryN) {
+         c = 0ull;
+         fFun(slot);
+      }
+   }
+};
+
+class ROneTimeCallback {
+   const Callback_t fFun;
+   std::vector<int> fHasBeenCalled; // std::vector<bool> is thread-unsafe for our purposes (and generally evil)
+
+public:
+   ROneTimeCallback(Callback_t &&f, unsigned int nSlots) : fFun(std::move(f)), fHasBeenCalled(nSlots, 0) {}
+
+   void operator()(unsigned int slot)
+   {
+      if (fHasBeenCalled[slot] == 1)
+         return;
+      fFun(slot);
+      fHasBeenCalled[slot] = 1;
+   }
+};
+
 } // ns RDF
 } // ns Internal
 
@@ -50,50 +92,14 @@ namespace RDFInternal = ROOT::Internal::RDF;
 class RFilterBase;
 class RRangeBase;
 using ROOT::RDF::RDataSource;
-using ColumnNames_t = std::vector<std::string>;
 
 /// The head node of a RDF computation graph.
 /// This class is responsible of running the event loop.
 class RLoopManager : public RNodeBase {
+   using ColumnNames_t = std::vector<std::string>;
    enum class ELoopType { kROOTFiles, kROOTFilesMT, kNoFiles, kNoFilesMT, kDataSource, kDataSourceMT };
-   using Callback_t = std::function<void(unsigned int)>;
-   class TCallback {
-      const Callback_t fFun;
-      const ULong64_t fEveryN;
-      std::vector<ULong64_t> fCounters;
 
-   public:
-      TCallback(ULong64_t everyN, Callback_t &&f, unsigned int nSlots)
-         : fFun(std::move(f)), fEveryN(everyN), fCounters(nSlots, 0ull)
-      {
-      }
-
-      void operator()(unsigned int slot)
-      {
-         auto &c = fCounters[slot];
-         ++c;
-         if (c == fEveryN) {
-            c = 0ull;
-            fFun(slot);
-         }
-      }
-   };
-
-   class TOneTimeCallback {
-      const Callback_t fFun;
-      std::vector<int> fHasBeenCalled; // std::vector<bool> is thread-unsafe for our purposes (and generally evil)
-
-   public:
-      TOneTimeCallback(Callback_t &&f, unsigned int nSlots) : fFun(std::move(f)), fHasBeenCalled(nSlots, 0) {}
-
-      void operator()(unsigned int slot)
-      {
-         if (fHasBeenCalled[slot] == 1)
-            return;
-         fFun(slot);
-         fHasBeenCalled[slot] = 1;
-      }
-   };
+   friend struct RCallCleanUpTask;
 
    std::vector<RDFInternal::RActionBase *> fBookedActions; ///< Non-owning pointers to actions to be run
    std::vector<RDFInternal::RActionBase *> fRunActions;    ///< Non-owning pointers to actions already run
@@ -111,8 +117,12 @@ class RLoopManager : public RNodeBase {
    const ELoopType fLoopType; ///< The kind of event loop that is going to be run (e.g. on ROOT files, on no files)
    const std::unique_ptr<RDataSource> fDataSource; ///< Owning pointer to a data-source object. Null if no data-source
    std::map<std::string, std::string> fAliasColumnNameMap; ///< ColumnNameAlias-columnName pairs
-   std::vector<TCallback> fCallbacks;                      ///< Registered callbacks
-   std::vector<TOneTimeCallback> fCallbacksOnce; ///< Registered callbacks to invoke just once before running the loop
+   std::vector<RDFInternal::RCallback> fCallbacks;         ///< Registered callbacks
+   /// Registered callbacks to invoke just once before running the loop
+   std::vector<RDFInternal::ROneTimeCallback> fCallbacksOnce;
+   /// Registered callbacks to call at the beginning of each "data block"
+   std::vector<RDFInternal::Callback_t> fDataBlockCallbacks;
+   RDFInternal::RDataBlockNotifier fDataBlockNotifier;
    unsigned int fNRuns{0}; ///< Number of event loops run
 
    /// Registry of per-slot value pointers for booked data-source columns
@@ -132,8 +142,9 @@ class RLoopManager : public RNodeBase {
    void InitNodeSlots(TTreeReader *r, unsigned int slot);
    void InitNodes();
    void CleanUpNodes();
-   void CleanUpTask(unsigned int slot);
+   void CleanUpTask(TTreeReader *r, unsigned int slot);
    void EvalChildrenCounts();
+   void SetupDataBlockCallbacks(TTreeReader *r, unsigned int slot);
 
 public:
    RLoopManager(TTree *tree, const ColumnNames_t &defaultBranches);
@@ -190,6 +201,8 @@ public:
    std::shared_ptr<ROOT::Internal::RDF::GraphDrawing::GraphNode> GetGraph();
 
    const ColumnNames_t &GetBranchNames();
+
+   void AddDataBlockCallback(std::function<void(unsigned int)> &&callback);
 };
 
 } // ns RDF

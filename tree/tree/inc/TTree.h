@@ -161,6 +161,7 @@ private:
    void             SortBranchesByTime();
    Int_t            FlushBasketsImpl() const;
    void             MarkEventCluster();
+   Long64_t         GetMedianClusterSize();
 
 protected:
    virtual void     KeepCircular();
@@ -175,7 +176,7 @@ protected:
    Int_t    SetBranchAddressImp(TBranch *branch, void* addr, TBranch** ptr);
    virtual TLeaf   *GetLeafImpl(const char* branchname, const char* leafname);
 
-   Long64_t         GetCacheAutoSize(Bool_t withDefault = kFALSE) const;
+   Long64_t         GetCacheAutoSize(Bool_t withDefault = kFALSE);
    char             GetNewlineValue(std::istream &inputStream);
    void             ImportClusterRanges(TTree *fromtree);
    void             MoveReadCache(TFile *src, TDirectory *dir);
@@ -460,8 +461,8 @@ public:
    virtual Long64_t        GetEntriesFast() const   { return fEntries; }
    virtual Long64_t        GetEntriesFriend() const;
    virtual Long64_t        GetEstimate() const { return fEstimate; }
-   virtual Int_t           GetEntry(Long64_t entry = 0, Int_t getall = 0);
-           Int_t           GetEvent(Long64_t entry = 0, Int_t getall = 0) { return GetEntry(entry, getall); }
+   virtual Int_t           GetEntry(Long64_t entry, Int_t getall = 0);
+           Int_t           GetEvent(Long64_t entry, Int_t getall = 0) { return GetEntry(entry, getall); }
    virtual Int_t           GetEntryWithIndex(Int_t major, Int_t minor = 0);
    virtual Long64_t        GetEntryNumberWithBestIndex(Long64_t major, Long64_t minor = 0) const;
    virtual Long64_t        GetEntryNumberWithIndex(Long64_t major, Long64_t minor = 0) const;

@@ -17,6 +17,7 @@
 #include <ROOT/RField.hxx>
 #include <ROOT/RNTupleModel.hxx>
 #include <ROOT/RNTuple.hxx>
+#include <ROOT/StringUtils.hxx>
 
 #include <cstdlib>
 #include <memory>
@@ -46,6 +47,8 @@ std::unique_ptr<ROOT::Experimental::RNTupleModel> ROOT::Experimental::RNTupleMod
    auto cloneFieldZero = fFieldZero->Clone("");
    cloneModel->fFieldZero = std::unique_ptr<RFieldZero>(static_cast<RFieldZero *>(cloneFieldZero.release()));
    cloneModel->fDefaultEntry = cloneModel->fFieldZero->GenerateEntry();
+   cloneModel->fFieldNames = fFieldNames;
+   cloneModel->fDescription = fDescription;
    return cloneModel;
 }
 
@@ -73,6 +76,27 @@ std::shared_ptr<ROOT::Experimental::RCollectionNTupleWriter> ROOT::Experimental:
    fDefaultEntry->CaptureValue(field->CaptureValue(collectionNTuple->GetOffsetPtr()));
    fFieldZero->Attach(std::move(field));
    return collectionNTuple;
+}
+
+ROOT::Experimental::Detail::RFieldBase *ROOT::Experimental::RNTupleModel::GetField(std::string_view fieldName)
+{
+   if (fieldName.empty())
+      return nullptr;
+
+   auto *field = static_cast<ROOT::Experimental::Detail::RFieldBase *>(fFieldZero.get());
+   for (auto subfieldName : ROOT::Split(fieldName, ".")) {
+      const auto subfields = field->GetSubFields();
+      auto it =
+         std::find_if(subfields.begin(), subfields.end(), [&](const auto *f) { return f->GetName() == subfieldName; });
+      if (it != subfields.end()) {
+         field = *it;
+      } else {
+         field = nullptr;
+         break;
+      }
+   }
+
+   return field;
 }
 
 std::unique_ptr<ROOT::Experimental::REntry> ROOT::Experimental::RNTupleModel::CreateEntry()

@@ -60,6 +60,7 @@
 #include <list>
 #include <shlobj.h>
 #include <conio.h>
+#include <time.h>
 
 #if defined (_MSC_VER) && (_MSC_VER >= 1400)
    #include <intrin.h>
@@ -4389,7 +4390,7 @@ Bool_t TWinNTSystem::DispatchTimers(Bool_t mode)
 
    fInsideNotify = kTRUE;
 
-   TOrdCollectionIter it((TOrdCollection*)fTimers);
+   TListIter it(fTimers);
    TTimer *t;
    Bool_t  timedout = kFALSE;
 

@@ -1233,9 +1233,14 @@ static void RegisterCxxModules(cling::Interpreter &clingInterp)
       // FIXME: Hist is not a core module but is very entangled to MathCore and
       // causes issues.
       std::vector<std::string> FIXMEModules = {"Hist"};
+      clang::CompilerInstance &CI = *clingInterp.getCI();
+      clang::Preprocessor &PP = CI.getPreprocessor();
+      ModuleMap &MMap = PP.getHeaderSearchInfo().getModuleMap();
+      if (MMap.findModule("RInterface"))
+         FIXMEModules.push_back("RInterface");
+
       LoadModules(FIXMEModules, clingInterp);
 
-      clang::CompilerInstance &CI = *clingInterp.getCI();
       GlobalModuleIndex *GlobalIndex = nullptr;
       // Conservatively enable platform by platform.
       bool supportedPlatform =
@@ -1274,10 +1279,8 @@ static void RegisterCxxModules(cling::Interpreter &clingInterp)
       if (GlobalIndex)
          GlobalIndex->getKnownModuleFileNames(KnownModuleFileNames);
 
-      clang::Preprocessor &PP = CI.getPreprocessor();
       std::vector<std::string> PendingModules;
       PendingModules.reserve(256);
-      ModuleMap &MMap = PP.getHeaderSearchInfo().getModuleMap();
       for (auto I = MMap.module_begin(), E = MMap.module_end(); I != E; ++I) {
          clang::Module *M = I->second;
          assert(M);
@@ -1396,6 +1399,9 @@ TCling::TCling(const char *name, const char *title, const char* const argv[])
 
       // Add include path to etc/cling.
       clingArgsStorage.push_back("-I" + interpInclude + "/cling");
+
+      // Add include path to etc/cling.
+      clingArgsStorage.push_back("-I" + interpInclude + "/cling/plugins/include");
 
       // Add the root include directory and etc/ to list searched by default.
       clingArgsStorage.push_back(std::string(("-I" + TROOT::GetIncludeDir()).Data()));
@@ -1605,7 +1611,8 @@ TCling::TCling(const char *name, const char *title, const char* const argv[])
       cling::DynamicLibraryManager& DLM = *fInterpreter->getDynamicLibraryManager();
       // Make sure cling looks into ROOT's libdir, even if not part of LD_LIBRARY_PATH
       // e.g. because of an RPATH build.
-      DLM.addSearchPath(TROOT::GetLibDir().Data());
+      DLM.addSearchPath(TROOT::GetLibDir().Data(), /*isUser=*/true,
+                        /*prepend=*/true);
       auto ShouldPermanentlyIgnore = [](llvm::StringRef FileName) -> bool{
          llvm::StringRef stem = llvm::sys::path::stem(FileName);
          return stem.startswith("libNew") || stem.startswith("libcppyy_backend");
@@ -1926,10 +1933,7 @@ bool TCling::RegisterPrebuiltModulePath(const std::string &FullPath,
       llvm::sys::path::append(ModuleMapFileName, ModuleMapName);
       const FileEntry *FE = FM.getFile(ModuleMapFileName, /*openFile*/ false,
                                        /*CacheFailure*/ false);
-
-      // FIXME: Calling IsLoaded is slow! Replace this with the appropriate
-      // call to the clang::ModuleMap class.
-      if (FE && !this->IsLoaded(FE->getName().data())) {
+      if (FE) {
          if (!HS.loadModuleMapFile(FE, /*IsSystem*/ false))
             return true;
          Error("RegisterPrebuiltModulePath", "Could not load modulemap in %s", ModuleMapFileName.c_str());
@@ -3360,7 +3364,7 @@ void TCling::RegisterLoadedSharedLibrary(const char* filename)
    // used to resolve symbols.
    cling::DynamicLibraryManager* DLM = fInterpreter->getDynamicLibraryManager();
    if (!DLM->isLibraryLoaded(filename)) {
-      DLM->loadLibrary(filename, true /*permanent*/);
+      DLM->loadLibrary(filename, true /*permanent*/, true /*resolved*/);
    }
 
 #if defined(R__MACOSX)
@@ -3446,7 +3450,7 @@ Int_t TCling::Load(const char* filename, Bool_t system)
       = cling::DynamicLibraryManager::kLoadLibNotFound;
    if (!canonLib.empty()) {
       if (system)
-         res = DLM->loadLibrary(filename, system);
+         res = DLM->loadLibrary(filename, system, true);
       else {
          // For the non system libs, we'd like to be able to unload them.
          // FIXME: Here we lose the information about kLoadLibAlreadyLoaded case.

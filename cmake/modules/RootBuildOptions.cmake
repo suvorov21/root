@@ -77,9 +77,10 @@ endfunction()
 #   The default value can be changed as many times as we wish before calling ROOT_APPLY_OPTIONS()
 #--------------------------------------------------------------------------------------------------
 
-ROOT_BUILD_OPTION(alien OFF "Enable support for AliEn (requires libgapiUI from ALICE)")
+ROOT_BUILD_OPTION(alien OFF "Enable support for AliEn (requires libgapiUI from ALICE, deprecated)")
 ROOT_BUILD_OPTION(arrow OFF "Enable support for Apache Arrow")
 ROOT_BUILD_OPTION(asimage ON "Enable support for image processing via libAfterImage")
+ROOT_BUILD_OPTION(asserts OFF "Enable asserts (defaults to ON for CMAKE_BUILD_TYPE=Debug and/or dev=ON)")
 ROOT_BUILD_OPTION(builtin_afterimage OFF "Build bundled copy of libAfterImage")
 ROOT_BUILD_OPTION(builtin_cfitsio OFF "Build CFITSIO internally (requires network)")
 ROOT_BUILD_OPTION(builtin_clang ON "Build bundled copy of Clang")
@@ -117,6 +118,7 @@ ROOT_BUILD_OPTION(coverage OFF "Enable compile flags for coverage testing")
 ROOT_BUILD_OPTION(cuda OFF "Enable support for CUDA (requires CUDA toolkit >= 7.5)")
 ROOT_BUILD_OPTION(cudnn ON "Enable support for cuDNN (default when Cuda is enabled)")
 ROOT_BUILD_OPTION(cxxmodules OFF "Enable support for C++ modules")
+ROOT_BUILD_OPTION(daos OFF "Enable RNTuple support for Intel DAOS")
 ROOT_BUILD_OPTION(dataframe ON "Enable ROOT RDataFrame")
 ROOT_BUILD_OPTION(test_distrdf_pyspark OFF "Enable distributed RDataFrame tests that use pyspark")
 ROOT_BUILD_OPTION(davix ON "Enable support for Davix (HTTP/WebDAV access)")
@@ -139,9 +141,8 @@ ROOT_BUILD_OPTION(libcxx OFF "Build using libc++")
 ROOT_BUILD_OPTION(macos_native OFF "Disable looking for libraries, includes and binaries in locations other than a native installation (MacOS only)")
 ROOT_BUILD_OPTION(mathmore ON "Build libMathMore extended math library (requires GSL)")
 ROOT_BUILD_OPTION(memory_termination OFF "Free internal ROOT memory before process termination (experimental, used for leak checking)")
-ROOT_BUILD_OPTION(memstat OFF "Build memory statistics utility (helps to detect memory leaks)")
 ROOT_BUILD_OPTION(mlp ON "Enable support for TMultilayerPerceptron classes' federation")
-ROOT_BUILD_OPTION(minuit2 OFF "Build Minuit2 minimization library")
+ROOT_BUILD_OPTION(minuit2 ON "Build Minuit2 minimization library")
 ROOT_BUILD_OPTION(monalisa OFF "Enable support for monitoring with Monalisa (requires libapmoncpp)")
 ROOT_BUILD_OPTION(mpi OFF "Enable support for Message Passing Interface (MPI)")
 ROOT_BUILD_OPTION(mysql ON "Enable support for MySQL databases")
@@ -157,9 +158,9 @@ ROOT_BUILD_OPTION(pythia8 ON "Enable support for Pythia 8.x")
 ROOT_BUILD_OPTION(qt5web OFF "Enable support for Qt5 web-based display (requires Qt5WebEngine)")
 ROOT_BUILD_OPTION(r OFF "Enable support for R bindings (requires R, Rcpp, and RInside)")
 ROOT_BUILD_OPTION(roofit ON "Build the advanced fitting package RooFit, and RooStats for statistical tests. If xml is available, also build HistFactory.")
-ROOT_BUILD_OPTION(webgui ON "Build Web-based UI components of ROOT (requires C++14 standard or higher)")
-ROOT_BUILD_OPTION(root7 ON "Build ROOT 7 components of ROOT (requires C++14 standard or higher)")
-ROOT_BUILD_OPTION(rpath OFF "Link libraries with built-in RPATH (run-time search path)")
+ROOT_BUILD_OPTION(webgui ON "Build Web-based UI components of ROOT (requires C++17 standard or higher)")
+ROOT_BUILD_OPTION(root7 ON "Build ROOT 7 components of ROOT (requires C++17 standard or higher)")
+ROOT_BUILD_OPTION(rpath ON "Link libraries with built-in RPATH (run-time search path)")
 ROOT_BUILD_OPTION(runtime_cxxmodules ON "Enable runtime support for C++ modules")
 ROOT_BUILD_OPTION(shadowpw OFF "Enable support for shadow passwords")
 ROOT_BUILD_OPTION(shared ON "Use shared 3rd party libraries if possible")
@@ -170,13 +171,13 @@ ROOT_BUILD_OPTION(tcmalloc OFF "Use tcmalloc memory allocator")
 ROOT_BUILD_OPTION(tmva ON "Build TMVA multi variate analysis library")
 ROOT_BUILD_OPTION(tmva-cpu ON "Build TMVA with CPU support for deep learning (requires BLAS)")
 ROOT_BUILD_OPTION(tmva-gpu OFF "Build TMVA with GPU support for deep learning (requries CUDA)")
+ROOT_BUILD_OPTION(tmva-sofie OFF "Build TMVA with support for sofie - fast inference code generation (requires protobuf 3)")
 ROOT_BUILD_OPTION(tmva-pymva ON "Enable support for Python in TMVA (requires numpy)")
 ROOT_BUILD_OPTION(tmva-rmva OFF "Enable support for R in TMVA")
 ROOT_BUILD_OPTION(spectrum ON "Enable support for TSpectrum")
 ROOT_BUILD_OPTION(unuran OFF "Enable support for UNURAN (package for generating non-uniform random numbers)")
 ROOT_BUILD_OPTION(uring OFF "Enable support for io_uring (requires liburing and Linux kernel >= 5.1)")
 ROOT_BUILD_OPTION(vc OFF "Enable support for Vc (SIMD Vector Classes for C++)")
-ROOT_BUILD_OPTION(vmc OFF "Build VMC simulation library")
 ROOT_BUILD_OPTION(vdt ON "Enable support for VDT (fast and vectorisable mathematical functions)")
 ROOT_BUILD_OPTION(veccore OFF "Enable support for VecCore SIMD abstraction library")
 ROOT_BUILD_OPTION(vecgeom OFF "Enable support for VecGeom vectorized geometry library")
@@ -196,7 +197,6 @@ option(rootbench "Build rootbench if rootbench exists in root or if it is a sibl
 option(roottest "Build roottest if roottest exists in root or if it is a sibling directory." OFF)
 option(testing "Enable testing with CTest" OFF)
 option(asan "Build ROOT with address sanitizer instrumentation" OFF)
-option(asserts "Enable asserts (is ON for CMAKE_BUILD_TYPE=Debug and dev=ON)" OFF)
 
 set(gcctoolchain "" CACHE PATH "Set path to GCC toolchain used to build llvm/clang")
 
@@ -236,7 +236,6 @@ if(all)
  set(fcgi_defvalue ON)
  set(imt_defvalue ON)
  set(mathmore_defvalue ON)
- set(memstat_defvalue ON)
  set(minuit2_defvalue ON)
  set(mlp_defvalue ON)
  set(monalisa_defvalue ON)
@@ -263,7 +262,6 @@ if(all)
  set(tmva-rmva_defvalue ON)
  set(unuran_defvalue ON)
  set(vc_defvalue ON)
- set(vmc_defvalue ON)
  set(vdt_defvalue ON)
  set(veccore_defvalue ON)
  set(vecgeom_defvalue ON)
@@ -306,17 +304,12 @@ endif()
 
 #---Changes in defaults due to platform-------------------------------------------------------
 if(WIN32)
-  set(builtin_tbb_defvalue OFF)
-  set(dataframe_defvalue OFF)
   set(davix_defvalue OFF)
-  set(imt_defvalue OFF)
-  set(memstat_defvalue OFF)
   set(pyroot_legacy_defvalue OFF)
-  set(roofit_defvalue OFF)
   set(roottest_defvalue OFF)
+  set(rpath_defvalue OFF)
   set(runtime_cxxmodules_defvalue OFF)
   set(testing_defvalue OFF)
-  set(tmva_defvalue OFF)
   set(vdt_defvalue OFF)
   set(x11_defvalue OFF)
   set(xrootd_defvalue OFF)
@@ -361,21 +354,21 @@ foreach(opt ${root_build_options})
   endif()
 endforeach()
 
-#---ROOT 7 requires C++14 standard or higher---------------------------------------------------
-if(NOT CMAKE_CXX_STANDARD GREATER 11)
+#---ROOT 7 requires C++17 standard or higher---------------------------------------------------
+if(NOT CMAKE_CXX_STANDARD GREATER 14)
   set(root7_defvalue OFF)
 endif()
 
 #---webgui by default always build together with root7-----------------------------------------
 set(webgui_defvalue ${root7_defvalue})
 
+#---Enable asserts for Debug builds and for the dev mode---------------------------------------
+if(_BUILD_TYPE_UPPER STREQUAL DEBUG OR dev)
+  set(asserts_defvalue ON)
+endif()
+
 #---Define at moment the options with the selected default values------------------------------
 ROOT_APPLY_OPTIONS()
-
-#---Enable asserts for Debug builds and for the dev mode---------------------------------------
-if(CMAKE_BUILD_TYPE STREQUAL "Debug" OR dev)
-  set(asserts ON CACHE BOOL "" FORCE)
-endif()
 
 #---roottest option implies testing
 if(roottest OR rootbench)
@@ -390,14 +383,14 @@ endif(builtin_cling)
 
 if(root7)
   if(NOT CMAKE_CXX_STANDARD)
-    set(CMAKE_CXX_STANDARD 14 CACHE STRING "C++14 standard used with root7")
-    message(STATUS "Enabling C++14 for compilation of root7 components")
-  elseif(NOT CMAKE_CXX_STANDARD GREATER 11)
-    message(FATAL_ERROR ">>> At least C++14 standard required with root7, please enable it using CMake option: -DCMAKE_CXX_STANDARD=14")
+    set(CMAKE_CXX_STANDARD 17 CACHE STRING "C++17 standard used with root7")
+    message(STATUS "Enabling C++17 for compilation of root7 components")
+  elseif(NOT CMAKE_CXX_STANDARD GREATER 14)
+    message(FATAL_ERROR ">>> At least C++17 standard required with root7, please enable it using CMake option: -DCMAKE_CXX_STANDARD=17")
   endif()
 endif()
 
-#---check if webgui can be build-------------------------------
+#---check if webgui can be built-------------------------------
 if(webgui)
   if(NOT CMAKE_CXX_STANDARD GREATER 11)
     set(webgui OFF CACHE BOOL "(WebGUI requires at least C++14)" FORCE)
@@ -409,14 +402,14 @@ endif()
 
 #---Removed options------------------------------------------------------------
 foreach(opt afdsmgrd afs bonjour castor chirp geocad glite globus hdfs ios
-            krb5 ldap qt qtgsi rfio ruby sapdb srp table python)
+            krb5 ldap memstat qt qtgsi rfio ruby sapdb srp table python vmc)
   if(${opt})
     message(FATAL_ERROR ">>> Option '${opt}' is no longer supported in ROOT ${ROOT_VERSION}.")
   endif()
 endforeach()
 
 #---Deprecated options------------------------------------------------------------------------
-foreach(opt memstat vmc)
+foreach(opt alien)
   if(${opt})
     message(DEPRECATION ">>> Option '${opt}' is deprecated and will be removed in the next release of ROOT. Please contact root-dev@cern.ch should you still need it.")
   endif()
@@ -434,26 +427,30 @@ include_regular_expression("^[^.]+$|[.]h$|[.]icc$|[.]hxx$|[.]hpp$")
 include(RootInstallDirs)
 
 #---RPATH options-------------------------------------------------------------------------------
-#  When building, don't use the install RPATH already (but later on when installing)
-set(CMAKE_SKIP_BUILD_RPATH FALSE)         # don't skip the full RPATH for the build tree
-set(CMAKE_BUILD_WITH_INSTALL_RPATH FALSE) # use always the build RPATH for the build tree
-set(CMAKE_MACOSX_RPATH TRUE)              # use RPATH for MacOSX
-set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE) # point to directories outside the build tree to the install RPATH
 
-# Check whether to add RPATH to the installation (the build tree always has the RPATH enabled)
+set(CMAKE_SKIP_BUILD_RPATH FALSE)
+set(CMAKE_BUILD_WITH_INSTALL_RPATH FALSE)
+
+# add to RPATH any directories outside the project that are in the linker search path
+set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
+
 if(rpath)
-  set(CMAKE_INSTALL_RPATH ${CMAKE_INSTALL_FULL_LIBDIR} CACHE INTERNAL "") # install LIBDIR
-  set(CMAKE_SKIP_INSTALL_RPATH FALSE)          # don't skip the full RPATH for the install tree
-elseif(APPLE)
-  set(CMAKE_INSTALL_NAME_DIR "@rpath")
-  if(gnuinstall)
-    set(CMAKE_INSTALL_RPATH ${CMAKE_INSTALL_FULL_LIBDIR}) # install LIBDIR
+  file(RELATIVE_PATH BINDIR_TO_LIBDIR "${CMAKE_INSTALL_FULL_BINDIR}" "${CMAKE_INSTALL_FULL_LIBDIR}")
+
+  set(CMAKE_SKIP_RPATH FALSE)
+  set(CMAKE_SKIP_INSTALL_RPATH FALSE)
+
+  if(APPLE)
+    set(CMAKE_MACOSX_RPATH TRUE)
+    set(CMAKE_INSTALL_NAME_DIR "@rpath")
+    set(CMAKE_INSTALL_RPATH "@loader_path/${BINDIR_TO_LIBDIR}")
   else()
-    set(CMAKE_INSTALL_RPATH "@loader_path/../lib")    # self relative LIBDIR
+    set(CMAKE_INSTALL_RPATH "$ORIGIN;$ORIGIN/${BINDIR_TO_LIBDIR}")
   endif()
-  set(CMAKE_SKIP_INSTALL_RPATH FALSE)          # don't skip the full RPATH for the install tree
+
+  unset(BINDIR_TO_LIBDIR)
 else()
-  set(CMAKE_SKIP_INSTALL_RPATH TRUE)           # skip the full RPATH for the install tree
+  set(CMAKE_SKIP_INSTALL_RPATH TRUE)
 endif()
 
 #---deal with the DCMAKE_IGNORE_PATH------------------------------------------------------------

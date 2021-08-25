@@ -10,6 +10,7 @@
 #include "gtest/gtest.h"
 #include <limits>
 #include <memory>
+#include <thread>
 using namespace ROOT;         // RDataFrame
 using namespace ROOT::RDF;    // RInterface
 using namespace ROOT::VecOps; // RVec
@@ -992,23 +993,28 @@ TEST(RDFSnapshotMore, ColsWithCustomTitlesMT)
 
 TEST(RDFSnapshotMore, TreeWithFriendsMT)
 {
-   const auto fname = "treewithfriendsmt.root";
-   RDataFrame(10).Define("x", []() { return 0; }).Snapshot<int>("t", fname, {"x"});
+   const auto fname1 = "treewithfriendsmt1.root";
+   const auto fname2 = "treewithfriendsmt2.root";
+   RDataFrame(10).Define("x", []() { return 42; }).Snapshot<int>("t", fname1, {"x"});
+   RDataFrame(10).Define("x", []() { return 0; }).Snapshot<int>("t", fname2, {"x"});
 
    ROOT::EnableImplicitMT();
 
-   TFile file(fname);
+   TFile file(fname1);
    auto tree = file.Get<TTree>("t");
-   TFile file2(fname);
+   TFile file2(fname2);
    auto tree2 = file2.Get<TTree>("t");
    tree->AddFriend(tree2);
 
    const auto outfname = "out_treewithfriendsmt.root";
    RDataFrame df(*tree);
-   df.Snapshot<int>("t", outfname, {"x"});
-   ROOT::DisableImplicitMT();
+   auto df_out = df.Snapshot<int>("t", outfname, {"x"});
+   EXPECT_EQ(df_out->Max<int>("x").GetValue(), 42);
+   EXPECT_EQ(df_out->GetColumnNames(), std::vector<std::string>{"x"});
 
-   gSystem->Unlink(fname);
+   ROOT::DisableImplicitMT();
+   gSystem->Unlink(fname1);
+   gSystem->Unlink(fname2);
    gSystem->Unlink(outfname);
 }
 
@@ -1023,7 +1029,9 @@ TEST(RDFSnapshotMore, JittedSnapshotAndAliasedColumns)
 
    // aliasing a column from a file
    const auto fname2 = "out_aliasedcustomcolumn2.root";
-   df2->Alias("z", "y").Snapshot("t", fname2, "z");
+   auto df3 = df2->Alias("z", "y").Snapshot("t", fname2, "z");
+   EXPECT_EQ(df3->GetColumnNames(), std::vector<std::string>({"z"}));
+   EXPECT_EQ(df3->Max<int>("z").GetValue(), 42);
 
    gSystem->Unlink(fname);
    gSystem->Unlink(fname2);
@@ -1041,9 +1049,10 @@ TEST(RDFSnapshotMore, EmptyBuffersMT)
 {
    const auto fname = "emptybuffersmt.root";
    const auto treename = "t";
-   ROOT::EnableImplicitMT(4);
+   const unsigned int nslots = std::min(4U, std::thread::hardware_concurrency());
+   ROOT::EnableImplicitMT(nslots);
    ROOT::RDataFrame d(10);
-   auto dd = d.DefineSlot("x", [](unsigned int s) { return s == 3 ? 0 : 1; })
+   auto dd = d.DefineSlot("x", [&](unsigned int s) { return s == nslots - 1 ? 0 : 1; })
                .Filter([](int x) { return x == 0; }, {"x"}, "f");
    auto r = dd.Report();
    dd.Snapshot<int>(treename, fname, {"x"});

@@ -380,7 +380,7 @@ TGraph::TGraph(const TF1 *f, Option_t *option)
 /// Graph constructor reading input from filename.
 ///
 /// `filename` is assumed to contain at least two columns of numbers.
-/// the string format is by default `"%lg %lg"`.
+/// The string format is by default `"%lg %lg"`.
 /// This is a standard c formatting for `scanf()`.
 ///
 /// If columns of numbers should be skipped, a `"%*lg"` or `"%*s"` for each column
@@ -2360,6 +2360,30 @@ void TGraph::SetNameTitle(const char *name, const char *title)
 {
    SetName(name);
    SetTitle(title);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+/// Set statistics option on/off.
+///
+/// By default, the statistics box is drawn.
+/// The paint options can be selected via gStyle->SetOptStats.
+/// This function sets/resets the kNoStats bit in the graph object.
+/// It has priority over the Style option.
+
+void TGraph::SetStats(Bool_t stats)
+{
+   ResetBit(kNoStats);
+   if (!stats) {
+      SetBit(kNoStats);
+      //remove the "stats" object from the list of functions
+      if (fFunctions) {
+         TObject *obj = fFunctions->FindObject("stats");
+         if (obj) {
+            fFunctions->Remove(obj);
+            delete obj;
+         }
+      }
+   }
 }
 
 ////////////////////////////////////////////////////////////////////////////////

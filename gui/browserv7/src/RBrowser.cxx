@@ -12,14 +12,9 @@
 
 #include <ROOT/RBrowser.hxx>
 
-#include <ROOT/Browsable/RGroup.hxx>
-#include <ROOT/Browsable/RWrapper.hxx>
-#include <ROOT/Browsable/RProvider.hxx>
-#include <ROOT/Browsable/TObjectHolder.hxx>
 #include <ROOT/Browsable/RSysFile.hxx>
 
 #include <ROOT/RLogger.hxx>
-#include <ROOT/RMakeUnique.hxx>
 #include <ROOT/RFileDialog.hxx>
 
 #include "RBrowserWidget.hxx"
@@ -27,7 +22,6 @@
 #include "TString.h"
 #include "TSystem.h"
 #include "TROOT.h"
-#include "TFolder.h"
 #include "TBufferJSON.h"
 #include "TApplication.h"
 #include "TRint.h"
@@ -125,6 +119,13 @@ public:
 /** \class ROOT::Experimental::RBrowser
 \ingroup rbrowser
 \brief Web-based %ROOT file browser
+
+RBrowser requires one of the supported web browsers:
+  - Google Chrome (preferable)
+  - Mozilla Firefox
+
+\image html v7_rbrowser.png
+
 */
 
 //////////////////////////////////////////////////////////////////////////////////////////////
@@ -134,29 +135,7 @@ RBrowser::RBrowser(bool use_rcanvas)
 {
    SetUseRCanvas(use_rcanvas);
 
-   auto comp = std::make_shared<Browsable::RGroup>("top","Root browser");
-
-   auto seldir = Browsable::RSysFile::ProvideTopEntries(comp);
-
-   std::unique_ptr<Browsable::RHolder> rootfold = std::make_unique<Browsable::TObjectHolder>(gROOT->GetRootFolder(), kFALSE);
-   auto elem_root = Browsable::RProvider::Browse(rootfold);
-   if (elem_root)
-      comp->Add(std::make_shared<Browsable::RWrapper>("root", elem_root));
-
-   std::unique_ptr<Browsable::RHolder> rootfiles = std::make_unique<Browsable::TObjectHolder>(gROOT->GetListOfFiles(), kFALSE);
-   auto elem_files = Browsable::RProvider::Browse(rootfiles);
-   if (elem_files) {
-      auto files = std::make_shared<Browsable::RWrapper>("ROOT Files", elem_files);
-      files->SetExpandByDefault(true);
-      comp->Add(files);
-      // if there are any open files, make them visible by default
-      if (elem_files->GetNumChilds() > 0)
-         seldir = {};
-   }
-
-   fBrowsable.SetTopElement(comp);
-
-   fBrowsable.SetWorkingPath(seldir);
+   fBrowsable.CreateDefaultElements();
 
    fWebWindow = RWebWindow::Create();
    fWebWindow->SetDefaultPage("file:rootui5sys/browser/browser.html");
@@ -207,6 +186,9 @@ std::string RBrowser::ProcessBrowserRequest(const std::string &msg)
 
    if (!request)
       return ""s;
+
+   if (request->path.empty() && fWidgets.empty() && fBrowsable.GetWorkingPath().empty())
+      fBrowsable.ClearCache();
 
    return "BREPL:"s + fBrowsable.ProcessRequest(*request.get());
 }
@@ -375,6 +357,16 @@ std::shared_ptr<RBrowserWidget> RBrowser::AddWidget(const std::string &kind)
    fActiveWidgetName = name;
 
    return widget;
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////////
+/// Create new widget and send init message to the client
+
+void RBrowser::AddInitWidget(const std::string &kind)
+{
+   auto widget = AddWidget(kind);
+   if (widget && fWebWindow && (fWebWindow->NumConnections() > 0))
+      fWebWindow->Send(0, NewWidgetMsg(widget));
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////
@@ -597,7 +589,6 @@ void RBrowser::ProcessMsg(unsigned connid, const std::string &arg0)
                ProcessSaveFile(editor->fFileName, editor->fContent);
                ProcessRunMacro(editor->fFileName);
             }
-
          }
       }
    } else if (kind == "NEWWIDGET") {
@@ -614,3 +605,18 @@ void RBrowser::ProcessMsg(unsigned connid, const std::string &arg0)
       fWebWindow->Send(connid, GetCurrentWorkingDirectory());
    }
 }
+
+//////////////////////////////////////////////////////////////////////////////////////////////
+/// Set working path in the browser
+
+void RBrowser::SetWorkingPath(const std::string &path)
+{
+   auto p = Browsable::RElement::ParsePath(path);
+   auto elem = fBrowsable.GetSubElement(p);
+   if (elem) {
+      fBrowsable.SetWorkingPath(p);
+      if (fWebWindow && (fWebWindow->NumConnections() > 0))
+         fWebWindow->Send(0, GetCurrentWorkingDirectory());
+   }
+}
+

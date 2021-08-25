@@ -17,13 +17,13 @@
 #include "ROOT/RDF/Utils.hxx"
 #include "ROOT/RDF/RFilterBase.hxx"
 #include "ROOT/RDF/RLoopManager.hxx"
-#include "ROOT/RIntegerSequence.hxx"
 #include "ROOT/TypeTraits.hxx"
 #include "RtypesCore.h"
 
 #include <algorithm>
 #include <memory>
 #include <string>
+#include <utility> // std::index_sequence
 #include <vector>
 
 namespace ROOT {
@@ -55,7 +55,7 @@ class R__CLING_PTRCHECK(off) RFilter final : public RFilterBase {
    using TypeInd_t = std::make_index_sequence<ColumnTypes_t::list_size>;
 
    FilterF fFilter;
-   const ColumnNames_t fColumnNames;
+   const ROOT::RDF::ColumnNames_t fColumnNames;
    const std::shared_ptr<PrevDataFrame> fPrevDataPtr;
    PrevDataFrame &fPrevData;
    /// Column readers per slot and per input column
@@ -64,7 +64,7 @@ class R__CLING_PTRCHECK(off) RFilter final : public RFilterBase {
    std::array<bool, ColumnTypes_t::list_size> fIsDefine;
 
 public:
-   RFilter(FilterF f, const ColumnNames_t &columns, std::shared_ptr<PrevDataFrame> pd,
+   RFilter(FilterF f, const ROOT::RDF::ColumnNames_t &columns, std::shared_ptr<PrevDataFrame> pd,
            const RDFInternal::RBookedDefines &defines, std::string_view name = "")
       : RFilterBase(pd->GetLoopManagerUnchecked(), name, pd->GetLoopManagerUnchecked()->GetNSlots(), defines),
         fFilter(std::move(f)), fColumnNames(columns), fPrevDataPtr(std::move(pd)), fPrevData(*fPrevDataPtr),
@@ -83,19 +83,20 @@ public:
 
    bool CheckFilters(unsigned int slot, Long64_t entry) final
    {
-      if (entry != fLastCheckedEntry[slot]) {
+      if (entry != fLastCheckedEntry[slot * RDFInternal::CacheLineStep<Long64_t>()]) {
          if (!fPrevData.CheckFilters(slot, entry)) {
             // a filter upstream returned false, cache the result
-            fLastResult[slot] = false;
+            fLastResult[slot * RDFInternal::CacheLineStep<int>()] = false;
          } else {
             // evaluate this filter, cache the result
             auto passed = CheckFilterHelper(slot, entry, ColumnTypes_t{}, TypeInd_t{});
-            passed ? ++fAccepted[slot] : ++fRejected[slot];
-            fLastResult[slot] = passed;
+            passed ? ++fAccepted[slot * RDFInternal::CacheLineStep<ULong64_t>()]
+                   : ++fRejected[slot * RDFInternal::CacheLineStep<ULong64_t>()];
+            fLastResult[slot * RDFInternal::CacheLineStep<int>()] = passed;
          }
-         fLastCheckedEntry[slot] = entry;
+         fLastCheckedEntry[slot * RDFInternal::CacheLineStep<Long64_t>()] = entry;
       }
-      return fLastResult[slot];
+      return fLastResult[slot * RDFInternal::CacheLineStep<int>()];
    }
 
    template <typename... ColTypes, std::size_t... S>

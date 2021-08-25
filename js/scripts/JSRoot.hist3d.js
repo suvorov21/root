@@ -1,7 +1,7 @@
 /// @file JSRoot.hist3d.js
 /// histograms 3D graphics
 
-JSROOT.define(['d3', 'painter', 'base3d', 'hist'], (d3, jsrp, THREE) => {
+JSROOT.define(['d3', 'painter', 'base3d', 'latex', 'hist'], (d3, jsrp, THREE, ltx) => {
 
    "use strict";
 
@@ -32,12 +32,12 @@ JSROOT.define(['d3', 'painter', 'base3d', 'hist'], (d3, jsrp, THREE) => {
       if ((pos.x >= 0) && (pos.y >= 0)) qudrant = 3;
       if ((pos.x >= 0) && (pos.y < 0)) qudrant = 4;
 
-      function testvisible(id, range) {
+      let testvisible = (id, range) => {
          if (id <= qudrant) id+=4;
          return (id > qudrant) && (id < qudrant+range);
-      }
+      };
 
-      for (let n=0;n<top.children.length;++n) {
+      for (let n = 0; n < top.children.length; ++n) {
          let chld = top.children[n];
          if (chld.grid) chld.visible = bb && testvisible(chld.grid, 3); else
          if (chld.zid) chld.visible = testvisible(chld.zid, 2); else
@@ -50,8 +50,7 @@ JSROOT.define(['d3', 'painter', 'base3d', 'hist'], (d3, jsrp, THREE) => {
             chld.visible = testvisible(chld.xyboxid + shift, range);
             if (!chld.visible && chld.bottom && bb)
                chld.visible = testvisible(chld.xyboxid, 3);
-         } else
-         if (chld.zboxid) {
+         } else if (chld.zboxid) {
             let range = 2, shift = 0;
             if (fb && bb) range = 5; else
             if (bb && !fb) range = 4; else
@@ -422,7 +421,7 @@ JSROOT.define(['d3', 'painter', 'base3d', 'hist'], (d3, jsrp, THREE) => {
          if (tip.y1 === tip.y2) console.warn('same tip Y', tip.y1, tip.y2);
          if (tip.z1 === tip.z2) { tip.z2 = tip.z1 + 0.0001; } // avoid zero faces
 
-         for (let k=0,nn=-3;k<indicies.length;++k) {
+         for (let k = 0,nn = -3; k < indicies.length; ++k) {
             let vert = vertices[indicies[k]];
             pos[k*3]   = tip.x1 + vert.x * (tip.x2 - tip.x1);
             pos[k*3+1] = tip.y1 + vert.y * (tip.y2 - tip.y1);
@@ -547,7 +546,7 @@ JSROOT.define(['d3', 'painter', 'base3d', 'hist'], (d3, jsrp, THREE) => {
             is_major = false; lbl = "";
          }
 
-         if (is_major && lbl && (lbl.length>0)) {
+         if (is_major && lbl && (lbl.length > 0)) {
             let text3d = new THREE.TextGeometry(lbl, { font: JSROOT.threejs_font_helvetiker_regular, size: textsize, height: 0, curveSegments: 5 });
             text3d.computeBoundingBox();
             let draw_width = text3d.boundingBox.max.x - text3d.boundingBox.min.x,
@@ -573,7 +572,7 @@ JSROOT.define(['d3', 'painter', 'base3d', 'hist'], (d3, jsrp, THREE) => {
       }
 
       if (xaxis && xaxis.fTitle) {
-         let text3d = new THREE.TextGeometry(xaxis.fTitle, { font: JSROOT.threejs_font_helvetiker_regular, size: textsize, height: 0, curveSegments: 5 });
+         let text3d = new THREE.TextGeometry(ltx.translateLaTeX(xaxis.fTitle), { font: JSROOT.threejs_font_helvetiker_regular, size: textsize, height: 0, curveSegments: 5 });
          text3d.computeBoundingBox();
          text3d.center = xaxis.TestBit(JSROOT.EAxisBits.kCenterTitle);
          text3d.gry = 2; // factor 2 shift
@@ -596,7 +595,7 @@ JSROOT.define(['d3', 'painter', 'base3d', 'hist'], (d3, jsrp, THREE) => {
          return pos;
       };
 
-      let CreateZoomMesh = (kind, size_3d, use_y_for_z) => {
+      let createZoomMesh = (kind, size_3d, use_y_for_z) => {
 
          let positions, geom = new THREE.BufferGeometry();
          if (kind === "z")
@@ -619,8 +618,8 @@ JSROOT.define(['d3', 'painter', 'base3d', 'hist'], (d3, jsrp, THREE) => {
          if (kind=="y") mesh.rotateZ(Math.PI/2).rotateX(Math.PI);
 
          mesh.v1 = new THREE.Vector3(positions[0], positions[1], positions[2]);
-         mesh.v2 = new THREE.Vector3(positions[3], positions[4], positions[5]);
-         mesh.v3 = new THREE.Vector3(positions[6], positions[7], positions[8]);
+         mesh.v2 = new THREE.Vector3(positions[6], positions[7], positions[8]);
+         mesh.v3 = new THREE.Vector3(positions[3], positions[4], positions[5]);
 
          mesh.globalIntersect = function(raycaster) {
             if (!this.v1 || !this.v2 || !this.v3) return undefined;
@@ -630,9 +629,8 @@ JSROOT.define(['d3', 'painter', 'base3d', 'hist'], (d3, jsrp, THREE) => {
             plane.applyMatrix4(this.matrixWorld);
 
             let v1 = raycaster.ray.origin.clone(),
-                v2 = v1.clone().addScaledVector(raycaster.ray.direction, 1e10);
-
-            let pnt = plane.intersectLine(new THREE.Line3(v1,v2), new THREE.Vector3());
+                v2 = v1.clone().addScaledVector(raycaster.ray.direction, 1e10),
+                pnt = plane.intersectLine(new THREE.Line3(v1,v2), new THREE.Vector3());
 
             if (!pnt) return undefined;
 
@@ -659,26 +657,39 @@ JSROOT.define(['d3', 'painter', 'base3d', 'hist'], (d3, jsrp, THREE) => {
 
             if (!tgtmesh) {
                gg = this.geometry.clone();
-               if (kind==="z") gg.vertices[1].x = gg.vertices[2].x = ticklen;
-                          else gg.vertices[2].y = gg.vertices[3].y = -ticklen;
+               let pos = gg.getAttribute('position').array;
+
+               // original vertices [0, 2, 1, 0, 3, 2]
+               // if (kind==="z") gg.vertices[1].x = gg.vertices[2].x = ticklen;
+               //            else gg.vertices[2].y = gg.vertices[3].y = -ticklen;
+               if (kind==="z") pos[6] = pos[3] = pos[15] = ticklen;
+                          else pos[4] = pos[16] = pos[13] = -ticklen;
                tgtmesh = new THREE.Mesh(gg, new THREE.MeshBasicMaterial({ color: 0xFF00, side: THREE.DoubleSide }));
                this.add(tgtmesh);
             } else {
                gg = tgtmesh.geometry;
             }
 
-            if (kind=="z") {
-               gg.vertices[0].z = gg.vertices[1].z = pnt1[kind];
-               gg.vertices[2].z = gg.vertices[3].z = pnt2[kind];
+            let pos = gg.getAttribute('position').array;
+
+            if (kind == "z") {
+               // gg.vertices[0].z = gg.vertices[1].z = pnt1[kind];
+               // gg.vertices[2].z = gg.vertices[3].z = pnt2[kind];
+               pos[2] = pos[11] = pos[8] = pnt1[kind];
+               pos[5] = pos[17] = pos[14] = pnt2[kind];
             } else {
-               gg.vertices[0].x = gg.vertices[3].x = pnt1[kind];
-               gg.vertices[1].x = gg.vertices[2].x = pnt2[kind];
+               // gg.vertices[0].x = gg.vertices[3].x = pnt1[kind];
+               // gg.vertices[1].x = gg.vertices[2].x = pnt2[kind];
+               pos[0] = pos[9] = pos[12] = pnt1[kind];
+               pos[6] = pos[3] = pos[15] = pnt2[kind];
             }
+
+            gg.getAttribute('position').needsUpdate = true;
 
             gg.computeFaceNormals();
 
-            gg.verticesNeedUpdate = true;
-            gg.normalsNeedUpdate = true;
+            //gg.verticesNeedUpdate = true;
+            //gg.normalsNeedUpdate = true;
 
             return true;
          }
@@ -708,7 +719,7 @@ JSROOT.define(['d3', 'painter', 'base3d', 'hist'], (d3, jsrp, THREE) => {
          xcont.add(mesh);
       });
 
-      if (opts.zoom) xcont.add(CreateZoomMesh("x", this.size_xy3d));
+      if (opts.zoom) xcont.add(createZoomMesh("x", this.size_xy3d));
       top.add(xcont);
 
       xcont = new THREE.Object3D();
@@ -732,7 +743,7 @@ JSROOT.define(['d3', 'painter', 'base3d', 'hist'], (d3, jsrp, THREE) => {
 
       //xcont.add(new THREE.Mesh(ggg2, textMaterial));
       xcont.xyid = 4;
-      if (opts.zoom) xcont.add(CreateZoomMesh("x", this.size_xy3d));
+      if (opts.zoom) xcont.add(createZoomMesh("x", this.size_xy3d));
       top.add(xcont);
 
       lbls = []; text_scale = 1; maxtextheight = 0; ticks = [];
@@ -774,7 +785,7 @@ JSROOT.define(['d3', 'painter', 'base3d', 'hist'], (d3, jsrp, THREE) => {
       }
 
       if (yaxis && yaxis.fTitle) {
-         let text3d = new THREE.TextGeometry(yaxis.fTitle, { font: JSROOT.threejs_font_helvetiker_regular, size: textsize, height: 0, curveSegments: 5 });
+         let text3d = new THREE.TextGeometry(ltx.translateLaTeX(yaxis.fTitle), { font: JSROOT.threejs_font_helvetiker_regular, size: textsize, height: 0, curveSegments: 5 });
          text3d.computeBoundingBox();
          text3d.center = yaxis.TestBit(JSROOT.EAxisBits.kCenterTitle);
          text3d.grx = 2; // factor 2 shift
@@ -807,7 +818,7 @@ JSROOT.define(['d3', 'painter', 'base3d', 'hist'], (d3, jsrp, THREE) => {
          });
 
          ycont.xyid = 3;
-         if (opts.zoom) ycont.add(CreateZoomMesh("y", this.size_xy3d));
+         if (opts.zoom) ycont.add(createZoomMesh("y", this.size_xy3d));
          top.add(ycont);
 
          ycont = new THREE.Object3D();
@@ -829,7 +840,7 @@ JSROOT.define(['d3', 'painter', 'base3d', 'hist'], (d3, jsrp, THREE) => {
             ycont.add(mesh);
          });
          ycont.xyid = 1;
-         if (opts.zoom) ycont.add(CreateZoomMesh("y", this.size_xy3d));
+         if (opts.zoom) ycont.add(createZoomMesh("y", this.size_xy3d));
          top.add(ycont);
       }
 
@@ -929,7 +940,7 @@ JSROOT.define(['d3', 'painter', 'base3d', 'hist'], (d3, jsrp, THREE) => {
          });
 
          if (zaxis && zaxis.fTitle) {
-            let text3d = new THREE.TextGeometry(zaxis.fTitle, { font: JSROOT.threejs_font_helvetiker_regular, size: textsize, height: 0, curveSegments: 5 });
+            let text3d = new THREE.TextGeometry(ltx.translateLaTeX(zaxis.fTitle), { font: JSROOT.threejs_font_helvetiker_regular, size: textsize, height: 0, curveSegments: 5 });
             text3d.computeBoundingBox();
             let draw_width = text3d.boundingBox.max.x - text3d.boundingBox.min.x,
                 // draw_height = text3d.boundingBox.max.y - text3d.boundingBox.min.y,
@@ -947,7 +958,7 @@ JSROOT.define(['d3', 'painter', 'base3d', 'hist'], (d3, jsrp, THREE) => {
          }
 
          zcont[n].add(n==0 ? zticksline : new THREE.LineSegments(zticksline.geometry, lineMaterial));
-         if (opts.zoom) zcont[n].add(CreateZoomMesh("z", this.size_z3d, opts.use_y_for_z));
+         if (opts.zoom) zcont[n].add(createZoomMesh("z", this.size_z3d, opts.use_y_for_z));
 
          zcont[n].zid = n + 2;
          top.add(zcont[n]);
@@ -970,7 +981,7 @@ JSROOT.define(['d3', 'painter', 'base3d', 'hist'], (d3, jsrp, THREE) => {
       if (this.size_z3d === 0) return;
 
       let linex_geom = jsrp.createLineSegments([grminx,0,0, grmaxx,0,0], lineMaterial, null, true);
-      for(let n=0;n<2;++n) {
+      for(let n = 0; n < 2; ++n) {
          let line = new THREE.LineSegments(linex_geom, lineMaterial);
          line.position.set(0, grminy, (n===0) ? grminz : grmaxz);
          line.xyboxid = 2; line.bottom = (n == 0);
@@ -983,7 +994,7 @@ JSROOT.define(['d3', 'painter', 'base3d', 'hist'], (d3, jsrp, THREE) => {
       }
 
       let liney_geom = jsrp.createLineSegments([0,grminy,0, 0,grmaxy,0], lineMaterial, null, true);
-      for(let n=0;n<2;++n) {
+      for(let n = 0; n < 2; ++n) {
          let line = new THREE.LineSegments(liney_geom, lineMaterial);
          line.position.set(grminx, 0, (n===0) ? grminz : grmaxz);
          line.xyboxid = 3; line.bottom = (n == 0);
@@ -996,7 +1007,7 @@ JSROOT.define(['d3', 'painter', 'base3d', 'hist'], (d3, jsrp, THREE) => {
       }
 
       let linez_geom = jsrp.createLineSegments([0,0,grminz, 0,0,grmaxz], lineMaterial, null, true);
-      for(let n=0;n<4;++n) {
+      for(let n = 0; n < 4; ++n) {
          let line = new THREE.LineSegments(linez_geom, lineMaterial);
          line.zboxid = zcont[n].zid;
          line.position.copy(zcont[n].position);
@@ -1045,7 +1056,7 @@ JSROOT.define(['d3', 'painter', 'base3d', 'hist'], (d3, jsrp, THREE) => {
 
       if ((i1 >= i2) || (j1 >= j2)) return;
 
-      let GetBinContent = (ii,jj, level) => {
+      let getBinContent = (ii,jj,level) => {
          // return bin content in binz1, binz2, reduced flags
          // return true if bin should be displayed
 
@@ -1102,7 +1113,7 @@ JSROOT.define(['d3', 'painter', 'base3d', 'hist'], (d3, jsrp, THREE) => {
          for (i=i1;i<i2;++i)
             for (j=j1;j<j2;++j) {
 
-               if (!GetBinContent(i,j,nlevel)) continue;
+               if (!getBinContent(i,j,nlevel)) continue;
 
                nobottom = !reduced && (nlevel>0);
                notop = !reduced && (binz2 > zmax) && (nlevel < levels.length-2);
@@ -1134,7 +1145,7 @@ JSROOT.define(['d3', 'painter', 'base3d', 'hist'], (d3, jsrp, THREE) => {
             x2 = handle.grx[i] + handle.xbar2*(handle.grx[i+1]-handle.grx[i]);
             for (j=j1;j<j2;++j) {
 
-               if (!GetBinContent(i,j,nlevel)) continue;
+               if (!getBinContent(i,j,nlevel)) continue;
 
                nobottom = !reduced && (nlevel>0);
                notop = !reduced && (binz2 > zmax) && (nlevel < levels.length-2);
@@ -1300,7 +1311,7 @@ JSROOT.define(['d3', 'painter', 'base3d', 'hist'], (d3, jsrp, THREE) => {
 
       for (i=i1;i<i2;++i)
          for (j=j1;j<j2;++j) {
-            if (!GetBinContent(i,j,0)) continue;
+            if (!getBinContent(i,j,0)) continue;
 
             // calculate required buffer size for line segments
             numlinevertices += (reduced ? rvertices.length : vertices.length);
@@ -1325,7 +1336,7 @@ JSROOT.define(['d3', 'painter', 'base3d', 'hist'], (d3, jsrp, THREE) => {
          x2 = handle.grx[i] + handle.xbar2*(handle.grx[i+1]-handle.grx[i]);
          for (j=j1;j<j2;++j) {
 
-            if (!GetBinContent(i,j,0)) continue;
+            if (!getBinContent(i,j,0)) continue;
 
             y1 = handle.gry[j] + handle.ybar1*(handle.gry[j+1] - handle.gry[j]);
             y2 = handle.gry[j] + handle.ybar2*(handle.gry[j+1] - handle.gry[j]);
@@ -2383,11 +2394,11 @@ JSROOT.define(['d3', 'painter', 'base3d', 'hist'], (d3, jsrp, THREE) => {
           print_entries = Math.floor(dostat / 10) % 10,
           print_mean = Math.floor(dostat / 100) % 10,
           print_rms = Math.floor(dostat / 1000) % 10,
+          print_integral = Math.floor(dostat / 1000000) % 10;
           // print_under = Math.floor(dostat / 10000) % 10,
           // print_over = Math.floor(dostat / 100000) % 10,
-          print_integral = Math.floor(dostat / 1000000) % 10;
-      //var print_skew = Math.floor(dostat / 10000000) % 10;
-      //var print_kurt = Math.floor(dostat / 100000000) % 10;
+          // print_skew = Math.floor(dostat / 10000000) % 10,
+          // print_kurt = Math.floor(dostat / 100000000) % 10;
 
       stat.clearPave();
 
@@ -2453,7 +2464,8 @@ JSROOT.define(['d3', 'painter', 'base3d', 'hist'], (d3, jsrp, THREE) => {
           k2 = this.getSelectIndex("z", "right", 0),
           i, j, k, bin_content;
 
-      if ((i2<=i1) || (j2<=j1) || (k2<=k1)) return true;
+      if ((i2<=i1) || (j2<=j1) || (k2<=k1))
+         return Promise.resolve(true);
 
       // scale down factor if too large values
       let coef = (this.gmaxbin > 1000) ? 1000/this.gmaxbin : 1,
@@ -2471,7 +2483,8 @@ JSROOT.define(['d3', 'painter', 'base3d', 'hist'], (d3, jsrp, THREE) => {
       }
 
       // too many pixels - use box drawing
-      if (numpixels > (main.webgl ? 100000 : 30000)) return false;
+      if (numpixels > (main.webgl ? 100000 : 30000))
+         return false;
 
       JSROOT.seed(sumz);
 
@@ -2499,49 +2512,53 @@ JSROOT.define(['d3', 'painter', 'base3d', 'hist'], (d3, jsrp, THREE) => {
          }
       }
 
-      let mesh = pnts.createPoints(this.getColor(histo.fMarkerColor));
-      main.toplevel.add(mesh);
+      return pnts.createPoints({ color: this.getColor(histo.fMarkerColor), promise: true }).then(mesh => {
+         main.toplevel.add(mesh);
 
-      mesh.bins = bins;
-      mesh.painter = this;
-      mesh.tip_color = (histo.fMarkerColor===3) ? 0xFF0000 : 0x00FF00;
+         mesh.bins = bins;
+         mesh.painter = this;
+         mesh.tip_color = (histo.fMarkerColor===3) ? 0xFF0000 : 0x00FF00;
 
-      mesh.tooltip = function(intersect) {
-         if (!Number.isInteger(intersect.index)) {
-            console.error('intersect.index not provided, check three.js version', THREE.REVISION, 'expected r127');
-            return null;
-         }
+         mesh.tooltip = function(intersect) {
+            if (!Number.isInteger(intersect.index)) {
+               console.error('intersect.index not provided, check three.js version', THREE.REVISION, 'expected r127');
+               return null;
+            }
 
-         let indx = Math.floor(intersect.index / this.nvertex);
-         if ((indx<0) || (indx >= this.bins.length)) return null;
+            let indx = Math.floor(intersect.index / this.nvertex);
+            if ((indx<0) || (indx >= this.bins.length)) return null;
 
-         let p = this.painter, histo = p.getHisto(),
-             main = p.getFramePainter(),
-             tip = p.get3DToolTip(this.bins[indx]);
+            let p = this.painter, histo = p.getHisto(),
+                main = p.getFramePainter(),
+                tip = p.get3DToolTip(this.bins[indx]);
 
-         tip.x1 = main.grx(histo.fXaxis.GetBinLowEdge(tip.ix));
-         tip.x2 = main.grx(histo.fXaxis.GetBinLowEdge(tip.ix+1));
-         tip.y1 = main.gry(histo.fYaxis.GetBinLowEdge(tip.iy));
-         tip.y2 = main.gry(histo.fYaxis.GetBinLowEdge(tip.iy+1));
-         tip.z1 = main.grz(histo.fZaxis.GetBinLowEdge(tip.iz));
-         tip.z2 = main.grz(histo.fZaxis.GetBinLowEdge(tip.iz+1));
-         tip.color = this.tip_color;
-         tip.opacity = 0.3;
+            tip.x1 = main.grx(histo.fXaxis.GetBinLowEdge(tip.ix));
+            tip.x2 = main.grx(histo.fXaxis.GetBinLowEdge(tip.ix+1));
+            tip.y1 = main.gry(histo.fYaxis.GetBinLowEdge(tip.iy));
+            tip.y2 = main.gry(histo.fYaxis.GetBinLowEdge(tip.iy+1));
+            tip.z1 = main.grz(histo.fZaxis.GetBinLowEdge(tip.iz));
+            tip.z2 = main.grz(histo.fZaxis.GetBinLowEdge(tip.iz+1));
+            tip.color = this.tip_color;
+            tip.opacity = 0.3;
 
-         return tip;
-      };
+            return tip;
+         };
 
-      return true;
+         return true;
+      });
    }
 
    /** @summary Drawing of 3D histogram
      * @private */
    TH3Painter.prototype.draw3DBins = function() {
 
-      if (!this.draw_content) return;
+      if (!this.draw_content)
+         Promise.resolve(false);
 
-      if (!this.options.Box && !this.options.GLBox && !this.options.GLColor && !this.options.Lego)
-         if (this.draw3DScatter()) return;
+      if (!this.options.Box && !this.options.GLBox && !this.options.GLColor && !this.options.Lego) {
+          let res = this.draw3DScatter();
+          if (res !== false) return res;
+      }
 
       let rootcolor = this.getObject().fFillColor,
           fillcolor = this.getColor(rootcolor),
@@ -2572,7 +2589,7 @@ JSROOT.define(['d3', 'painter', 'base3d', 'hist'], (d3, jsrp, THREE) => {
          single_bin_verts = new Float32Array(buffer_size);
          single_bin_norms = new Float32Array(buffer_size);
 
-         for (let k=0;k<indx.length;++k) {
+         for (let k = 0; k < indx.length; ++k) {
             let iii = indx[k]*3;
             single_bin_verts[k*3] = pos[iii];
             single_bin_verts[k*3+1] = pos[iii+1];
@@ -2836,12 +2853,17 @@ JSROOT.define(['d3', 'painter', 'base3d', 'hist'], (d3, jsrp, THREE) => {
             main.toplevel.add(lines);
          }
       }
+
+      return Promise.resolve(true);
    }
 
+   /** @summary Redraw TH3 histogram
+     * @private */
    TH3Painter.prototype.redraw = function(reason) {
 
       let main = this.getFramePainter(), // who makes axis and 3D drawing
-          histo = this.getHisto();
+          histo = this.getHisto(),
+          promise = Promise.resolve(true);
 
       if (reason == "resize") {
 
@@ -2853,13 +2875,14 @@ JSROOT.define(['d3', 'painter', 'base3d', 'hist'], (d3, jsrp, THREE) => {
          main.setAxesRanges(histo.fXaxis, this.xmin, this.xmax, histo.fYaxis, this.ymin, this.ymax, histo.fZaxis, this.zmin, this.zmax);
          main.set3DOptions(this.options);
          main.drawXYZ(main.toplevel, { zoom: JSROOT.settings.Zooming, ndim: 3 });
-         this.draw3DBins();
-         main.render3D();
-         this.updateStatWebCanvas();
-         main.addKeysHandler();
+         promise = this.draw3DBins().then(() => {
+            main.render3D();
+            this.updateStatWebCanvas();
+            main.addKeysHandler();
+         });
       }
 
-      return this.drawHistTitle();
+      return promise.then(() => this.drawHistTitle());
    }
 
    /** @summary Fill pad toolbar with TH3-related functions
@@ -3127,6 +3150,7 @@ JSROOT.define(['d3', 'painter', 'base3d', 'hist'], (d3, jsrp, THREE) => {
    }
 
    /** @summary Actual drawing of TGraph2D object
+     * @returns {Promise} for drawing ready
      * @private */
    TGraph2DPainter.prototype.redraw = function() {
 
@@ -3135,7 +3159,8 @@ JSROOT.define(['d3', 'painter', 'base3d', 'hist'], (d3, jsrp, THREE) => {
           graph = this.getObject(),
           step = 1;
 
-      if (!graph || !main || !fp || !fp.mode3d) return;
+      if (!graph || !main || !fp || !fp.mode3d)
+         return Promise.resolve(this);
 
       let countSelected = (zmin, zmax) => {
          let cnt = 0;
@@ -3163,7 +3188,8 @@ JSROOT.define(['d3', 'painter', 'base3d', 'hist'], (d3, jsrp, THREE) => {
       let markeratt = new JSROOT.TAttMarkerHandler(graph),
           palette = null,
           levels = [fp.scale_zmin, fp.scale_zmax],
-          scale = fp.size_xy3d / 100 * markeratt.getFullSize();
+          scale = fp.size_xy3d / 100 * markeratt.getFullSize(),
+          promises = [];
 
       if (this.options.Circles) scale = 0.06*fp.size_xy3d;
 
@@ -3195,7 +3221,7 @@ JSROOT.define(['d3', 'painter', 'base3d', 'hist'], (d3, jsrp, THREE) => {
          if (this.options.Line)
             line = new Float32Array((size-1)*6);
 
-         for (let i=0; i < graph.fNpoints; ++i) {
+         for (let i = 0; i < graph.fNpoints; ++i) {
             if ((graph.fX[i] < fp.scale_xmin) || (graph.fX[i] > fp.scale_xmax) ||
                 (graph.fY[i] < fp.scale_ymin) || (graph.fY[i] > fp.scale_ymax) ||
                 (graph.fZ[i] < lvl_zmin) || (graph.fZ[i] >= lvl_zmax)) continue;
@@ -3293,22 +3319,26 @@ JSROOT.define(['d3', 'painter', 'base3d', 'hist'], (d3, jsrp, THREE) => {
                fcolor = palette ? palette.calcColor(lvl, levels.length)
                                 : this.getColor(graph.fMarkerColor);
 
-            let mesh = pnts.createPoints({ color: fcolor, style: this.options.Circles ? 4 : graph.fMarkerStyle });
+            let pr = pnts.createPoints({ color: fcolor, style: this.options.Circles ? 4 : graph.fMarkerStyle, promise: true }).then(mesh => {
+               mesh.graph = graph;
+               mesh.painter = fp;
+               mesh.tip_color = (graph.fMarkerColor === 3) ? 0xFF0000 : 0x00FF00;
+               mesh.scale0 = 0.3*scale;
+               mesh.index = index;
 
-            mesh.graph = graph;
-            mesh.painter = fp;
-            mesh.tip_color = (graph.fMarkerColor === 3) ? 0xFF0000 : 0x00FF00;
-            mesh.scale0 = 0.3*scale;
-            mesh.index = index;
+               mesh.tip_name = this.getObjectHint();
+               mesh.tooltip = this.graph2DTooltip;
+               fp.toplevel.add(mesh);
+            });
 
-            mesh.tip_name = this.getObjectHint();
-            mesh.tooltip = this.graph2DTooltip;
-
-            fp.toplevel.add(mesh);
+            promises.push(pr);
          }
       }
 
-      fp.render3D(100);
+      return Promise.all(promises).then(() => {
+         fp.render3D(100);
+         return this;
+      });
    }
 
    jsrp.drawGraph2D = function(divid, gr, opt) {
@@ -3326,8 +3356,7 @@ JSROOT.define(['d3', 'painter', 'base3d', 'hist'], (d3, jsrp, THREE) => {
 
       return promise.then(() => {
          painter.addToPadPrimitives();
-         painter.redraw();
-         return painter;
+         return painter.redraw();
       });
    }
 
@@ -3359,7 +3388,7 @@ JSROOT.define(['d3', 'painter', 'base3d', 'hist'], (d3, jsrp, THREE) => {
           index = new Int32Array(size),
           select = 0, icnt = 0;
 
-      for (let i=0; i<poly.fP.length; i+=3) {
+      for (let i = 0; i < poly.fP.length; i += 3) {
 
          if ((poly.fP[i] < fp.scale_xmin) || (poly.fP[i] > fp.scale_xmax) ||
              (poly.fP[i+1] < fp.scale_ymin) || (poly.fP[i+1] > fp.scale_ymax) ||
@@ -3375,53 +3404,54 @@ JSROOT.define(['d3', 'painter', 'base3d', 'hist'], (d3, jsrp, THREE) => {
          pnts.addPoint(fp.grx(poly.fP[i]), fp.gry(poly.fP[i+1]), fp.grz(poly.fP[i+2]));
       }
 
-      let mesh = pnts.createPoints({ color: this.getColor(poly.fMarkerColor),
-                                     style: poly.fMarkerStyle });
+      return pnts.createPoints({ color: this.getColor(poly.fMarkerColor), style: poly.fMarkerStyle, promise: true }).then(mesh => {
 
-      mesh.tip_color = (poly.fMarkerColor === 3) ? 0xFF0000 : 0x00FF00;
-      mesh.tip_name = poly.fName || "Poly3D";
-      mesh.poly = poly;
-      mesh.painter = fp;
-      mesh.scale0 = 0.7*pnts.scale;
-      mesh.index = index;
+         mesh.tip_color = (poly.fMarkerColor === 3) ? 0xFF0000 : 0x00FF00;
+         mesh.tip_name = poly.fName || "Poly3D";
+         mesh.poly = poly;
+         mesh.painter = fp;
+         mesh.scale0 = 0.7*pnts.scale;
+         mesh.index = index;
 
-      fp.toplevel.add(mesh);
+         fp.toplevel.add(mesh);
 
-      mesh.tooltip = function(intersect) {
-         if (!Number.isInteger(intersect.index)) {
-            console.error('intersect.index not provided, check three.js version', THREE.REVISION, 'expected r102');
-            return null;
-         }
-         let indx = Math.floor(intersect.index / this.nvertex);
-         if ((indx<0) || (indx >= this.index.length)) return null;
+         mesh.tooltip = function(intersect) {
+            if (!Number.isInteger(intersect.index)) {
+               console.error('intersect.index not provided, check three.js version', THREE.REVISION, 'expected r102');
+               return null;
+            }
+            let indx = Math.floor(intersect.index / this.nvertex);
+            if ((indx<0) || (indx >= this.index.length)) return null;
 
-         indx = this.index[indx];
+            indx = this.index[indx];
 
-         let p = this.painter,
-             grx = p.grx(this.poly.fP[indx]),
-             gry = p.gry(this.poly.fP[indx+1]),
-             grz = p.grz(this.poly.fP[indx+2]);
+            let p = this.painter,
+                grx = p.grx(this.poly.fP[indx]),
+                gry = p.gry(this.poly.fP[indx+1]),
+                grz = p.grz(this.poly.fP[indx+2]);
 
-         return  {
-            x1: grx - this.scale0,
-            x2: grx + this.scale0,
-            y1: gry - this.scale0,
-            y2: gry + this.scale0,
-            z1: grz - this.scale0,
-            z2: grz + this.scale0,
-            color: this.tip_color,
-            lines: [ this.tip_name,
-                     "pnt: " + indx/3,
-                     "x: " + p.axisAsText("x", this.poly.fP[indx]),
-                     "y: " + p.axisAsText("y", this.poly.fP[indx+1]),
-                     "z: " + p.axisAsText("z", this.poly.fP[indx+2])
-                   ]
+            return  {
+               x1: grx - this.scale0,
+               x2: grx + this.scale0,
+               y1: gry - this.scale0,
+               y2: gry + this.scale0,
+               z1: grz - this.scale0,
+               z2: grz + this.scale0,
+               color: this.tip_color,
+               lines: [ this.tip_name,
+                        "pnt: " + indx/3,
+                        "x: " + p.axisAsText("x", this.poly.fP[indx]),
+                        "y: " + p.axisAsText("y", this.poly.fP[indx+1]),
+                        "z: " + p.axisAsText("z", this.poly.fP[indx+2])
+                      ]
+            };
          };
-      };
 
-      fp.render3D(100); // set timeout to be able draw other points
+         fp.render3D(100); // set timeout to be able draw other points
 
-      return Promise.resolve(this);
+         return this;
+
+      });
    }
 
    JSROOT.TH3Painter = TH3Painter;

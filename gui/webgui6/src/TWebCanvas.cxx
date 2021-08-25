@@ -37,13 +37,12 @@
 #include "TAtt3D.h"
 #include "TView.h"
 
-#include <ROOT/RMakeUnique.hxx>
-
 #include <cstdio>
 #include <cstring>
-#include <sstream>
 #include <fstream>
 #include <iostream>
+#include <memory>
+#include <sstream>
 
 /** \class TWebCanvas
 \ingroup webgui6
@@ -63,7 +62,7 @@ TWebCanvas::TWebCanvas(TCanvas *c, const char *name, Int_t x, Int_t y, UInt_t wi
    : TCanvasImp(c, name, x, y, width, height)
 {
    fReadOnly = readonly;
-   fStyleDelivery = gEnv->GetValue("WebGui.StyleDelivery", 0);
+   fStyleDelivery = gEnv->GetValue("WebGui.StyleDelivery", 1);
    fPaletteDelivery = gEnv->GetValue("WebGui.PaletteDelivery", 1);
    fPrimitivesMerge = gEnv->GetValue("WebGui.PrimitivesMerge", 100);
    fJsonComp = gEnv->GetValue("WebGui.JsonComp", TBufferJSON::kSameSuppression + TBufferJSON::kNoSpaces);
@@ -362,6 +361,8 @@ void TWebCanvas::CreatePadSnapshot(TPadWebSnapshot &paddata, TPad *pad, Long64_t
          TPaveStats *stats = nullptr;
          TObject *palette = nullptr;
 
+         hist->BufferEmpty();
+
          while ((fobj = fiter()) != nullptr) {
            if (fobj->InheritsFrom(TPaveStats::Class()))
                stats = dynamic_cast<TPaveStats *> (fobj);
@@ -369,7 +370,7 @@ void TWebCanvas::CreatePadSnapshot(TPadWebSnapshot &paddata, TPad *pad, Long64_t
               palette = fobj;
          }
 
-         if (!stats && first_obj && CanCreateObject("TPaveStats")) {
+         if (!stats && first_obj && (gStyle->GetOptStat() > 0) && CanCreateObject("TPaveStats")) {
             stats  = new TPaveStats(
                            gStyle->GetStatX() - gStyle->GetStatW(),
                            gStyle->GetStatY() - gStyle->GetStatH(),
@@ -409,16 +410,21 @@ void TWebCanvas::CreatePadSnapshot(TPadWebSnapshot &paddata, TPad *pad, Long64_t
          }
 
          if (title && first_obj) hopt.Append(";;use_pad_title");
-         if (stats) hopt.Append(";;use_pad_stats");
+
+         // if (stats) hopt.Append(";;use_pad_stats");
+
          if (palette) hopt.Append(";;use_pad_palette");
 
          paddata.NewPrimitive(obj, hopt.Data()).SetSnapshot(TWebSnapshot::kObject, obj);
 
-         fiter.Reset();
-         while ((fobj = fiter()) != nullptr)
-            CreateObjectSnapshot(paddata, pad, fobj, fiter.GetOption());
+         // do not extract objects from list of functions - stats and func need to be handled together with hist
+         //
+         // fiter.Reset();
+         // while ((fobj = fiter()) != nullptr)
+         //    CreateObjectSnapshot(paddata, pad, fobj, fiter.GetOption());
 
-         fPrimitivesLists.Add(hist->GetListOfFunctions());
+         // fPrimitivesLists.Add(hist->GetListOfFunctions());
+
          first_obj = false;
       } else if (obj->InheritsFrom(TGraph::Class())) {
          flush_master();
@@ -723,8 +729,10 @@ Bool_t TWebCanvas::DecodePadOptions(const std::string &msg)
 
       if (r.active && (pad != gPad)) gPad = pad;
 
-      pad->SetTicks(r.tickx, r.ticky);
-      pad->SetGrid(r.gridx, r.gridy);
+      if ((pad->GetTickx() != r.tickx) || (pad->GetTicky() != r.ticky))
+         pad->SetTicks(r.tickx, r.ticky);
+      if ((pad->GetGridx() != r.gridx) || (pad->GetGridy() != r.gridy))
+         pad->SetGrid(r.gridx, r.gridy);
       if (r.logx != pad->GetLogx())
          pad->SetLogx(r.logx);
       if (r.logy != pad->GetLogy())
@@ -800,6 +808,7 @@ Bool_t TWebCanvas::DecodePadOptions(const std::string &msg)
       // without special objects no need for explicit update of the pad
       if (fHasSpecials)
          pad->Modified(kTRUE);
+
    }
 
    if (fUpdatedSignal) fUpdatedSignal(); // invoke signal
@@ -1367,6 +1376,12 @@ TObject *TWebCanvas::FindPrimitive(const std::string &sid, TPad *pad, TObjLink *
             return h1->GetYaxis();
          if (h1 && (kind == "z"))
             return h1->GetZaxis();
+
+         if ((h1 || gr) && !kind.empty() && (kind.compare(0,5,"func_") == 0)) {
+            auto funcname = kind.substr(5);
+            TCollection *col = h1 ? h1->GetListOfFunctions() : gr->GetListOfFunctions();
+            return col ? col->FindObject(funcname.c_str()) : nullptr;
+         }
 
          if (!kind.empty() && (kind.compare(0,7,"member_") == 0)) {
             auto member = kind.substr(7);

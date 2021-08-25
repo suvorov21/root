@@ -12,7 +12,6 @@
 
 #include <ROOT/RWebDisplayHandle.hxx>
 
-#include <ROOT/RMakeUnique.hxx>
 #include <ROOT/RLogger.hxx>
 
 #include "RConfigure.h"
@@ -25,8 +24,9 @@
 #include "TROOT.h"
 #include "TBase64.h"
 
-#include <regex>
 #include <fstream>
+#include <memory>
+#include <regex>
 
 #ifdef _MSC_VER
 #include <process.h>
@@ -380,8 +380,8 @@ RWebDisplayHandle::ChromeCreator::ChromeCreator() : BrowserCreator(true)
    fHeadlessExec = gEnv->GetValue("WebGui.ChromeHeadless", "$prog --headless --disable-gpu $geometry $url &");
    fExec = gEnv->GetValue("WebGui.ChromeInteractive", "$prog $geometry --no-first-run --app=$url &"); // & in windows mean usage of spawn
 #else
-   fBatchExec = gEnv->GetValue("WebGui.ChromeBatch", "$prog --headless --incognito $geometry $url");
-   fHeadlessExec = gEnv->GetValue("WebGui.ChromeHeadless", "fork: --headless --incognito $geometry $url");
+   fBatchExec = gEnv->GetValue("WebGui.ChromeBatch", "$prog --headless --incognito --no-sandbox --no-zygote --disable-extensions --disable-gpu --disable-audio-output $geometry $url");
+   fHeadlessExec = gEnv->GetValue("WebGui.ChromeHeadless", "fork: --headless --incognito --no-sandbox --no-zygote --disable-extensions --disable-gpu --disable-audio-output $geometry $url");
    fExec = gEnv->GetValue("WebGui.ChromeInteractive", "$prog $geometry --no-first-run --incognito --app=\'$url\' &");
 #endif
 }

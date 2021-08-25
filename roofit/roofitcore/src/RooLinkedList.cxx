@@ -31,17 +31,16 @@ Use RooAbsCollection derived objects for public use
 
 #include "RooFit.h"
 #include "RooLinkedListIter.h"
-#include "RooHashTable.h"
 #include "RooAbsArg.h"
 #include "RooMsgService.h"
 
 #include "Riostream.h"
 #include "TBuffer.h"
 #include "TROOT.h"
-#include "ROOT/RMakeUnique.hxx"
 
 #include <algorithm>
 #include <list>
+#include <memory>
 #include <vector>
 
 using namespace std;
@@ -751,6 +750,22 @@ RooLinkedListIter RooLinkedList::iterator(Bool_t forward) const {
 RooFIter RooLinkedList::fwdIterator() const {
   auto iterImpl = std::make_unique<RooFIterForLinkedList>(this);
   return RooFIter(std::move(iterImpl));
+}
+
+RooLinkedListIterImpl RooLinkedList::begin() const {
+  return {this, true};
+}
+
+RooLinkedListIterImpl RooLinkedList::end() const {
+  return {this, nullptr, true};
+}
+
+RooLinkedListIterImpl RooLinkedList::rbegin() const {
+  return {this, false};
+}
+
+RooLinkedListIterImpl RooLinkedList::rend() const {
+  return {this, nullptr, false};
 }
 
 ////////////////////////////////////////////////////////////////////////////////

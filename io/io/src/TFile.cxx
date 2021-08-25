@@ -137,8 +137,8 @@ The structure of a directory is shown in TDirectoryFile::TDirectoryFile
 #include "TSchemaRuleSet.h"
 #include "TThreadSlots.h"
 #include "TGlobal.h"
-#include "ROOT/RMakeUnique.hxx"
 #include "ROOT/RConcurrentHashColl.hxx"
+#include <memory>
 
 using std::sqrt;
 
@@ -274,6 +274,15 @@ TFile::TFile() : TDirectoryFile(), fCompress(ROOT::RCompressionSetting::EAlgorit
 /// ~~~{.cpp}
 /// TFile f("file.root");
 /// if (f.IsZombie()) {
+///    std::cout << "Error opening file" << std::endl;
+///    exit(-1);
+/// }
+/// ~~~
+/// If you open a file instead with TFile::Open("file.root") use rather
+/// the following code as a nullptr is returned.
+/// ~~~{.cpp}
+/// TFile* f = TFile::Open("file.root");
+/// if (!f) {
 ///    std::cout << "Error opening file" << std::endl;
 ///    exit(-1);
 /// }
@@ -542,7 +551,7 @@ TFile::~TFile()
    }
 
    if (gDebug)
-      Info("~TFile", "dtor called for %s [%lx]", GetName(),(Long_t)this);
+      Info("~TFile", "dtor called for %s [%zx]", GetName(),(size_t)this);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1882,7 +1891,7 @@ TProcessID  *TFile::ReadProcessID(UShort_t pidf)
    snprintf(pidname,32,"ProcessID%d",pidf);
    pid = (TProcessID *)Get(pidname);
    if (gDebug > 0) {
-      printf("ReadProcessID, name=%s, file=%s, pid=%lx\n",pidname,GetName(),(Long_t)pid);
+      printf("ReadProcessID, name=%s, file=%s, pid=%zx\n",pidname,GetName(),(size_t)pid);
    }
    if (!pid) {
       //file->Error("ReadProcessID","Cannot find %s in file %s",pidname,file->GetName());
@@ -3983,7 +3992,7 @@ TFile *TFile::OpenFromCache(const char *name, Option_t *, const char *ftitle,
 /// TNetFile use either TNetFile directly or specify as host "localhost".
 /// The netopt argument is only used by TNetFile. For the meaning of the
 /// options and other arguments see the constructors of the individual
-/// file classes. In case of error returns 0.
+/// file classes. In case of error, it returns a nullptr.
 ///
 /// For TFile implementations supporting asynchronous file open, see
 /// TFile::AsyncOpen(...), it is possible to request a timeout with the
@@ -3995,6 +4004,10 @@ TFile *TFile::OpenFromCache(const char *name, Option_t *, const char *ftitle,
 /// The file will be downloaded to the directory specified by SetCacheFileDir().
 ///
 /// *The caller is responsible for deleting the pointer.*
+/// In READ mode, a nullptr is returned if the file does not exist or cannot be opened.
+/// In CREATE mode, a nullptr is returned if the file already exists or cannot be created.
+/// In RECREATE mode, a nullptr is returned if the file can not be created.
+/// In UPDATE mode, a nullptr is returned if the file cannot be created or opened.
 
 TFile *TFile::Open(const char *url, Option_t *options, const char *ftitle,
                    Int_t compress, Int_t netopt)
