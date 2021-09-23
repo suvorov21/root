@@ -60,7 +60,7 @@ RDaosURI ParseDaosURI(std::string_view uri)
 }
 
 /// \brief Some random distribution/attribute key.  TODO: apply recommended schema, i.e.
-/// an OID for each cluster + a dkey for each page. 
+/// an OID for each cluster + a dkey for each page.
 static constexpr std::uint64_t kDistributionKey = 0x5a3c69f0cafe4a11;
 static constexpr std::uint64_t kAttributeKey = 0x4243544b5344422d;
 
@@ -167,7 +167,7 @@ ROOT::Experimental::Detail::RPageSinkDaos::CommitPageImpl(ColumnHandle_t columnH
       sealedPage = SealPage(page, *element, GetWriteOptions().GetCompression());
    }
 
-   fCounters->fSzZip.Add(page.GetSize());
+   fCounters->fSzZip.Add(page.GetNBytes());
    return CommitSealedPageImpl(columnHandle.fId, sealedPage);
 }
 
@@ -188,17 +188,15 @@ ROOT::Experimental::Detail::RPageSinkDaos::CommitSealedPageImpl(
    result.fBytesOnStorage = sealedPage.fSize;
    fCounters->fNPageCommitted.Inc();
    fCounters->fSzWritePayload.Add(sealedPage.fSize);
+   fNBytesCurrentCluster += sealedPage.fSize;
    return result;
 }
 
 
-// TODO(jalopezg): the current byte range arithmetic makes little sense for the
-// object store. We might find out, however, that there are native ways to group
-// clusters in DAOS.
-ROOT::Experimental::RClusterDescriptor::RLocator
+std::uint64_t
 ROOT::Experimental::Detail::RPageSinkDaos::CommitClusterImpl(ROOT::Experimental::NTupleSize_t /* nEntries */)
 {
-   return {};
+   return std::exchange(fNBytesCurrentCluster, 0);
 }
 
 
@@ -247,7 +245,7 @@ ROOT::Experimental::Detail::RPage
 ROOT::Experimental::Detail::RPageSinkDaos::ReservePage(ColumnHandle_t columnHandle, std::size_t nElements)
 {
    if (nElements == 0)
-      nElements = GetWriteOptions().GetNElementsPerPage();
+      throw RException(R__FAIL("invalid call: request empty page"));
    auto elementSize = columnHandle.fColumn->GetElement()->GetSize();
    return fPageAllocator->NewPage(columnHandle.fId, elementSize, nElements);
 }
@@ -264,8 +262,8 @@ void ROOT::Experimental::Detail::RPageSinkDaos::ReleasePage(RPage &page)
 ROOT::Experimental::Detail::RPage ROOT::Experimental::Detail::RPageAllocatorDaos::NewPage(
    ColumnId_t columnId, void *mem, std::size_t elementSize, std::size_t nElements)
 {
-   RPage newPage(columnId, mem, elementSize * nElements, elementSize);
-   newPage.TryGrow(nElements);
+   RPage newPage(columnId, mem, elementSize, nElements);
+   newPage.GrowUnchecked(nElements);
    return newPage;
 }
 

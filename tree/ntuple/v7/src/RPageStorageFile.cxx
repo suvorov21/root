@@ -116,6 +116,7 @@ ROOT::Experimental::Detail::RPageSinkFile::WriteSealedPage(
    result.fBytesOnStorage = sealedPage.fSize;
    fCounters->fNPageCommitted.Inc();
    fCounters->fSzWritePayload.Add(sealedPage.fSize);
+   fNBytesCurrentCluster += sealedPage.fSize;
    return result;
 }
 
@@ -130,7 +131,7 @@ ROOT::Experimental::Detail::RPageSinkFile::CommitPageImpl(ColumnHandle_t columnH
       sealedPage = SealPage(page, *element, GetWriteOptions().GetCompression());
    }
 
-   fCounters->fSzZip.Add(page.GetSize());
+   fCounters->fSzZip.Add(page.GetNBytes());
    return WriteSealedPage(sealedPage, element->GetPackedSize(page.GetNElements()));
 }
 
@@ -147,14 +148,11 @@ ROOT::Experimental::Detail::RPageSinkFile::CommitSealedPageImpl(
 }
 
 
-ROOT::Experimental::RClusterDescriptor::RLocator
+std::uint64_t
 ROOT::Experimental::Detail::RPageSinkFile::CommitClusterImpl(ROOT::Experimental::NTupleSize_t /* nEntries */)
 {
-   RClusterDescriptor::RLocator result;
-   result.fPosition = fClusterMinOffset;
-   result.fBytesOnStorage = fClusterMaxOffset - fClusterMinOffset;
-   fClusterMinOffset = std::uint64_t(-1);
-   fClusterMaxOffset = 0;
+   auto result = fNBytesCurrentCluster;
+   fNBytesCurrentCluster = 0;
    return result;
 }
 
@@ -178,7 +176,7 @@ ROOT::Experimental::Detail::RPage
 ROOT::Experimental::Detail::RPageSinkFile::ReservePage(ColumnHandle_t columnHandle, std::size_t nElements)
 {
    if (nElements == 0)
-      nElements = GetWriteOptions().GetNElementsPerPage();
+      throw RException(R__FAIL("invalid call: request empty page"));
    auto elementSize = columnHandle.fColumn->GetElement()->GetSize();
    return fPageAllocator->NewPage(columnHandle.fId, elementSize, nElements);
 }
@@ -195,8 +193,8 @@ void ROOT::Experimental::Detail::RPageSinkFile::ReleasePage(RPage &page)
 ROOT::Experimental::Detail::RPage ROOT::Experimental::Detail::RPageAllocatorFile::NewPage(
    ColumnId_t columnId, void *mem, std::size_t elementSize, std::size_t nElements)
 {
-   RPage newPage(columnId, mem, elementSize * nElements, elementSize);
-   newPage.TryGrow(nElements);
+   RPage newPage(columnId, mem, elementSize, nElements);
+   newPage.GrowUnchecked(nElements);
    return newPage;
 }
 
@@ -380,9 +378,6 @@ ROOT::Experimental::Detail::RPageSourceFile::LoadCluster(DescriptorId_t clusterI
    fCounters->fNClusterLoaded.Inc();
 
    const auto &clusterDesc = GetDescriptor().GetClusterDescriptor(clusterId);
-   auto clusterLocator = clusterDesc.GetLocator();
-   auto clusterSize = clusterLocator.fBytesOnStorage;
-   R__ASSERT(clusterSize > 0);
 
    struct ROnDiskPageLocator {
       ROnDiskPageLocator() = default;

@@ -187,7 +187,8 @@ protected:
    virtual RClusterDescriptor::RLocator CommitPageImpl(ColumnHandle_t columnHandle, const RPage &page) = 0;
    virtual RClusterDescriptor::RLocator CommitSealedPageImpl(DescriptorId_t columnId,
                                                              const RPageStorage::RSealedPage &sealedPage) = 0;
-   virtual RClusterDescriptor::RLocator CommitClusterImpl(NTupleSize_t nEntries) = 0;
+   /// Returns the number of bytes written to storage (excluding metadata)
+   virtual std::uint64_t CommitClusterImpl(NTupleSize_t nEntries) = 0;
    virtual void CommitDatasetImpl() = 0;
 
    /// Helper for streaming a page. This is commonly used in derived, concrete page sinks. Note that if
@@ -241,13 +242,14 @@ public:
    /// TODO(jblomer): allow for vector commit of sealed pages
    void CommitSealedPage(DescriptorId_t columnId, const RPageStorage::RSealedPage &sealedPage);
    /// Finalize the current cluster and create a new one for the following data.
-   void CommitCluster(NTupleSize_t nEntries);
+   /// Returns the number of bytes written to storage (excluding meta-data).
+   std::uint64_t CommitCluster(NTupleSize_t nEntries);
    /// Finalize the current cluster and the entrire data set.
    void CommitDataset() { CommitDatasetImpl(); }
 
    /// Get a new, empty page for the given column that can be filled with up to nElements.  If nElements is zero,
    /// the page sink picks an appropriate size.
-   virtual RPage ReservePage(ColumnHandle_t columnHandle, std::size_t nElements = 0) = 0;
+   virtual RPage ReservePage(ColumnHandle_t columnHandle, std::size_t nElements) = 0;
 
    /// Returns the default metrics object.  Subclasses might alternatively provide their own metrics object by overriding this.
    virtual RNTupleMetrics &GetMetrics() override { return fMetrics; };

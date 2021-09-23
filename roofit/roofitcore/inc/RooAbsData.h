@@ -47,6 +47,12 @@ class RooFormulaVar;
 namespace RooBatchCompute{
 struct RunContext;
 }
+namespace RooFit {
+namespace TestStatistics {
+class RooAbsL;
+struct ConstantTermsOptimizer;
+}
+}
 
 
 // Writes a templated constructor for compatibility with ROOT builds using the
@@ -297,6 +303,13 @@ public:
 
   static StorageType getDefaultStorageType();
 
+  /// Returns snapshot of global observables stored in this data.
+  /// \return Pointer to a RooArgSet with the snapshot of global observables
+  ///         stored in the data. Can be `nullptr` if no global observales are
+  ///         stored.
+  RooArgSet const* getGlobalObservables() const { return _globalObservables.get(); }
+  void setGlobalObservables(RooArgSet const& globalObservables);
+
 protected:
 
   static StorageType defaultStorageType ;
@@ -321,6 +334,9 @@ protected:
   friend class RooAbsReal ;
   friend class RooAbsOptTestStatistic ;
   friend class RooAbsCachedPdf ;
+  friend struct RooFit::TestStatistics::ConstantTermsOptimizer;
+  // for access into copied dataset:
+  friend class RooFit::TestStatistics::RooAbsL;
 
   virtual void cacheArgs(const RooAbsArg* owner, RooArgSet& varSet, const RooArgSet* nset=0, Bool_t skipZeroWeights=kFALSE) ;
   virtual void resetCache() ;
@@ -341,8 +357,12 @@ protected:
 
   std::map<std::string,RooAbsData*> _ownedComponents ; // Owned external components
 
+  std::unique_ptr<RooArgSet> _globalObservables; // Snapshot of global observables
+
 private:
-   ClassDef(RooAbsData, 5) // Abstract data collection
+  void copyGlobalObservables(const RooAbsData& other);
+
+   ClassDef(RooAbsData, 6) // Abstract data collection
 };
 
 #endif
